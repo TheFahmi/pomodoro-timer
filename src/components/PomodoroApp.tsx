@@ -13,8 +13,16 @@ import ThemeSelector, { Theme } from './ThemeSelector';
 import MotivationalQuote from './MotivationalQuote';
 import Statistics from './Statistics';
 import NotificationSettings from './NotificationSettings';
+import BackgroundMusic from './BackgroundMusic';
+import BreakReminder from './BreakReminder';
+import SettingsMenu from './SettingsMenu';
+import ToolsMenu from './ToolsMenu';
+import TabSyncIndicator from './TabSyncIndicator';
+import SequentialTaskList from './SequentialTaskList';
 import { GamificationData } from './Gamification';
 import Achievements, { Achievement } from './Achievements';
+import { TabSynchronization } from '../utils/tabSynchronization';
+import { FocusModeOptions } from './FocusMode';
 import {
   defaultGamificationData,
   processCompletedPomodoro,
@@ -22,6 +30,10 @@ import {
   calculateTotalFocusTime,
   calculateCompletedTasks
 } from '../utils/gamificationUtils';
+import TimeCompleteAnimation from './TimeCompleteAnimation';
+import TimerTransition from './TimerTransition';
+import TimerThemeSelector, { TimerTheme, timerThemes } from './TimerThemeSelector';
+import { useTheme } from 'next-themes';
 
 // Timer types
 export type TimerType = 'pomodoro' | 'shortBreak' | 'longBreak';
@@ -32,6 +44,14 @@ export type SessionHistory = {
   task: string;
   completed: boolean;
   timestamp: Date;
+};
+
+// Format time as MM:SS utility function
+const formatTime = (seconds: number): string => {
+  if (isNaN(seconds) || seconds < 0) seconds = 0;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
 export default function PomodoroApp() {
@@ -59,7 +79,6 @@ export default function PomodoroApp() {
 
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
   const [sessionHistory, setSessionHistory] = useState<SessionHistory[]>([]);
-  const [currentTimeFormatted, setCurrentTimeFormatted] = useState('');
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [statisticsOpen, setStatisticsOpen] = useState(false);
 
@@ -69,6 +88,90 @@ export default function PomodoroApp() {
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   const [gamificationData, setGamificationData] = useState<GamificationData>(defaultGamificationData);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
+  const [timeCompleteVisible, setTimeCompleteVisible] = useState(false);
+  const [timerTransitionVisible, setTimerTransitionVisible] = useState(false);
+  const [previousTimer, setPreviousTimer] = useState<TimerType | null>(null);
+  const [currentTimerThemeId, setCurrentTimerThemeId] = useState('default');
+  const [currentTimerTheme, setCurrentTimerTheme] = useState<TimerTheme>(timerThemes[0]);
+
+  // Background music states
+  const [currentMusic, setCurrentMusic] = useState<string | null>(null);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+
+  // Tab synchronization
+  const [tabSync] = useState<TabSynchronization>(() => new TabSynchronization());
+  const [activeTabsCount, setActiveTabsCount] = useState(1);
+  const [isSequentialTaskView, setIsSequentialTaskView] = useState(false);
+
+  // Set up tab synchronization listeners
+  useEffect(() => {
+    if (!tabSync) return;
+
+    // Listen for timer changes from other tabs
+    tabSync.onMessage('TIMER_CHANGE', (message) => {
+      if (message.data && message.data.timer) {
+        setCurrentTimer(message.data.timer);
+        if (message.data.time) {
+          setTimeLeft(message.data.time);
+        }
+      }
+    });
+
+    // Listen for timer start/pause from other tabs
+    tabSync.onMessage('TIMER_START', () => {
+      setIsActive(true);
+    });
+
+    tabSync.onMessage('TIMER_PAUSE', () => {
+      setIsActive(false);
+    });
+
+    // Listen for timer reset from other tabs
+    tabSync.onMessage('TIMER_RESET', (message) => {
+      setIsActive(false);
+      if (message.data && message.data.time) {
+        setTimeLeft(message.data.time);
+      }
+    });
+
+    // Listen for timer skip from other tabs
+    tabSync.onMessage('TIMER_SKIP', (message) => {
+      setIsActive(false);
+      if (message.data) {
+        if (message.data.timer) {
+          setCurrentTimer(message.data.timer);
+        }
+        if (message.data.time) {
+          setTimeLeft(message.data.time);
+        }
+      }
+    });
+
+    // Listen for timer updates from other tabs
+    tabSync.onMessage('TIMER_UPDATE', (message) => {
+      if (message.data && message.data.time) {
+        setTimeLeft(message.data.time);
+      }
+    });
+
+    return () => {
+      // Clean up listeners
+      tabSync.offMessage('TIMER_CHANGE', () => {});
+      tabSync.offMessage('TIMER_START', () => {});
+      tabSync.offMessage('TIMER_PAUSE', () => {});
+      tabSync.offMessage('TIMER_RESET', () => {});
+      tabSync.offMessage('TIMER_SKIP', () => {});
+      tabSync.offMessage('TIMER_UPDATE', () => {});
+    };
+  }, [tabSync]);
+
+  // Focus mode options
+  const [focusModeOptions, setFocusModeOptions] = useState<FocusModeOptions>({
+    darkTheme: true,
+    hideTaskList: true,
+    hideControls: false,
+    fullscreen: false,
+  });
   const [currentTheme, setCurrentTheme] = useState<Theme>({
     id: 'default',
     name: 'Default',
@@ -148,6 +251,9 @@ export default function PomodoroApp() {
 
     const audio = new Audio(soundPath);
     audio.play().catch(err => console.error('Failed to play sound:', err));
+
+    // Show animation
+    setTimeCompleteVisible(true);
 
     // Show notification based on timer type
     if (isNotificationEnabled) {
@@ -266,15 +372,36 @@ export default function PomodoroApp() {
     setIsActive(false);
   }, [currentSound, currentTimer, pomodoroTime, shortBreakTime, longBreakTime, currentTask, currentTaskId, completedPomodoros, isNotificationEnabled, showNotification, getTimerLabel]);
 
+  // Handle closing the time complete animation
+  const handleTimeCompleteClose = () => {
+    setTimeCompleteVisible(false);
+  };
+
   // Timer controls
-  const startTimer = () => setIsActive(true);
-  const pauseTimer = () => setIsActive(false);
+  const startTimer = () => {
+    setIsActive(true);
+    if (typeof window !== 'undefined' && tabSync) {
+      tabSync.sendMessage('TIMER_START');
+    }
+  };
+
+  const pauseTimer = () => {
+    setIsActive(false);
+    if (typeof window !== 'undefined' && tabSync) {
+      tabSync.sendMessage('TIMER_PAUSE');
+    }
+  };
   const resetTimer = () => {
     setIsActive(false);
     // Reset the timer
     setTimeLeft(getCurrentTime());
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroTimeLeft', getCurrentTime().toString());
+
+      // Notify other tabs
+      if (tabSync) {
+        tabSync.sendMessage('TIMER_RESET', { time: getCurrentTime() });
+      }
     }
 
     // Add to history as incomplete
@@ -327,6 +454,12 @@ export default function PomodoroApp() {
     setTimeLeft(newTime);
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroTimeLeft', newTime.toString());
+      localStorage.setItem('pomodoroCurrentTimer', nextTimer);
+
+      // Notify other tabs
+      if (tabSync) {
+        tabSync.sendMessage('TIMER_SKIP', { timer: nextTimer, time: newTime });
+      }
     }
   };
 
@@ -345,10 +478,72 @@ export default function PomodoroApp() {
   };
 
   // Focus mode handler
-  const handleFocusModeChange = (isEnabled: boolean) => {
+  const handleFocusModeChange = (isEnabled: boolean, options?: FocusModeOptions) => {
     setIsFocusModeEnabled(isEnabled);
+
+    if (options) {
+      setFocusModeOptions(options);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('pomodoroFocusModeOptions', JSON.stringify(options));
+      }
+
+      // Apply fullscreen immediately if focus mode is enabled and the fullscreen option is true
+      if (isEnabled && options.fullscreen && typeof document !== 'undefined') {
+        const docEl = document.documentElement;
+        if (!document.fullscreenElement && docEl.requestFullscreen) {
+          docEl.requestFullscreen().catch(err => {
+            console.error('Error attempting to enable fullscreen:', err);
+          });
+        }
+      } else if (!isEnabled && document.fullscreenElement) {
+        // Exit fullscreen if focus mode is disabled
+        document.exitFullscreen().catch(err => {
+          console.error('Error exiting fullscreen:', err);
+        });
+      }
+    }
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroFocusMode', isEnabled.toString());
+    }
+  };
+
+  // Separate handler just for focus mode options changes
+  const handleFocusModeOptionsChange = (options: FocusModeOptions) => {
+    setFocusModeOptions(options);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroFocusModeOptions', JSON.stringify(options));
+    }
+
+    // Handle fullscreen option immediately if focus mode is enabled
+    if (isFocusModeEnabled && options.fullscreen && typeof document !== 'undefined') {
+      const docEl = document.documentElement;
+      if (!document.fullscreenElement && docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(err => {
+          console.error('Error attempting to enable fullscreen:', err);
+        });
+      }
+    } else if (isFocusModeEnabled && !options.fullscreen && document.fullscreenElement) {
+      document.exitFullscreen().catch(err => {
+        console.error('Error exiting fullscreen:', err);
+      });
+    }
+  };
+
+  // Toggle sequential task view
+  const toggleSequentialTaskView = () => {
+    setIsSequentialTaskView(prev => !prev);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroSequentialTaskView', (!isSequentialTaskView).toString());
+    }
+  };
+
+  // Handle task reordering
+  const handleTasksReorder = (reorderedTasks: Task[]) => {
+    setTasks(reorderedTasks);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroTasks', JSON.stringify(reorderedTasks));
     }
   };
 
@@ -371,6 +566,21 @@ export default function PomodoroApp() {
     console.log('Achievement clicked:', achievement.title);
   };
 
+  // Background music handlers
+  const handleMusicChange = (music: string | null) => {
+    setCurrentMusic(music);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroMusic', music || '');
+    }
+  };
+
+  const handleMusicPlayingChange = (isPlaying: boolean) => {
+    setIsMusicPlaying(isPlaying);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroMusicPlaying', isPlaying.toString());
+    }
+  };
+
   // Theme handler
   const handleThemeChange = (theme: Theme) => {
     setCurrentTheme(theme);
@@ -379,94 +589,216 @@ export default function PomodoroApp() {
     }
   };
 
-  // Task list handlers
-  const handleTaskAdd = (task: Task) => {
-    setTasks(prevTasks => [...prevTasks, task]);
-    if (!currentTaskId) {
-      setCurrentTaskId(task.id);
+  // Timer theme handler
+  const handleTimerThemeChange = (theme: TimerTheme) => {
+    setCurrentTimerTheme(theme);
+    setCurrentTimerThemeId(theme.id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroTimerTheme', JSON.stringify(theme));
     }
   };
 
-  const handleTaskUpdate = (updatedTask: Task) => {
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === updatedTask.id ? updatedTask : task
-      )
-    );
-  };
+  // Load data from localStorage on client side
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
-  const handleTaskDelete = (taskId: string) => {
-    setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
-    if (currentTaskId === taskId) {
-      setCurrentTaskId(null);
-    }
-  };
+    // Mark that we're on client side
+    isClient.current = true;
 
-  const handleTaskSelect = (taskId: string) => {
-    setCurrentTaskId(taskId);
-  };
+    // Load saved data
+    const savedPomodoroTime = localStorage.getItem('pomodoroPomodoroTime');
+    const savedShortBreakTime = localStorage.getItem('pomodoroShortBreakTime');
+    const savedLongBreakTime = localStorage.getItem('pomodoroLongBreakTime');
+    const savedCurrentTimer = localStorage.getItem('pomodoroCurrentTimer') as TimerType | null;
+    const savedIsActive = localStorage.getItem('pomodoroIsActive');
+      const savedTasks = localStorage.getItem('pomodoroTasks');
+    const savedCurrentTaskId = localStorage.getItem('pomodoroCurrentTaskId');
+    const savedCompletedPomodoros = localStorage.getItem('pomodoroCompletedPomodoros');
+      const savedSound = localStorage.getItem('pomodoroSound');
+      const savedFocusMode = localStorage.getItem('pomodoroFocusMode');
+      const savedFocusModeOptions = localStorage.getItem('pomodoroFocusModeOptions');
 
-  // Handle task input from the TaskInput component
-  const handleTaskInputChange = (taskName: string) => {
-    if (taskName.trim() === '') {
-      setCurrentTaskId(null);
-      return;
-    }
+    // Apply saved settings
+    if (savedPomodoroTime) setPomodoroTime(parseInt(savedPomodoroTime));
+    if (savedShortBreakTime) setShortBreakTime(parseInt(savedShortBreakTime));
+    if (savedLongBreakTime) setLongBreakTime(parseInt(savedLongBreakTime));
+    if (savedCurrentTimer) setCurrentTimer(savedCurrentTimer as TimerType);
+    if (savedIsActive === 'true') setIsActive(true);
+    if (savedTasks) setTasks(JSON.parse(savedTasks));
+    if (savedCurrentTaskId) setCurrentTaskId(savedCurrentTaskId);
+    if (savedCompletedPomodoros) setCompletedPomodoros(parseInt(savedCompletedPomodoros));
+    if (savedSound) setCurrentSound(savedSound);
 
-    // If there's a current task, update its name
-    if (currentTaskId) {
-      const currentTaskIndex = tasks.findIndex(task => task.id === currentTaskId);
-      if (currentTaskIndex !== -1) {
-        const updatedTasks = [...tasks];
-        updatedTasks[currentTaskIndex] = {
-          ...updatedTasks[currentTaskIndex],
-          title: taskName
-        };
-        setTasks(updatedTasks);
-        return;
+    if (savedFocusMode === 'true') {
+      setIsFocusModeEnabled(true);
+
+      // Apply fullscreen if that option was enabled
+      if (savedFocusModeOptions) {
+        const options = JSON.parse(savedFocusModeOptions) as FocusModeOptions;
+        setFocusModeOptions(options);
+
+        if (options.fullscreen) {
+          const docEl = document.documentElement;
+          if (docEl.requestFullscreen) {
+            docEl.requestFullscreen().catch(err => {
+              console.error('Error attempting to enable fullscreen:', err);
+            });
+          }
+        }
       }
     }
+  }, []);
 
-    // Otherwise, create a new task
-    const newTask: Task = {
-      id: Date.now().toString(),
-      title: taskName,
-      completed: false,
-      pomodoros: 1,
-      completedPomodoros: 0
+  // Listen for storage events from other tabs
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'pomodoroCurrentTimer' && e.newValue) {
+        setCurrentTimer(e.newValue as TimerType);
+      }
+      else if (e.key === 'pomodoroIsActive') {
+        setIsActive(e.newValue === 'true');
+      }
+      else if (e.key === 'pomodoroTasks' && e.newValue) {
+        setTasks(JSON.parse(e.newValue));
+      }
+      else if (e.key === 'pomodoroCurrentTaskId') {
+        setCurrentTaskId(e.newValue);
+      }
+      else if (e.key === 'pomodoroCompletedCount' && e.newValue) {
+        setCompletedPomodoros(parseInt(e.newValue, 10));
+      }
+      else if (e.key === 'pomodoroTimeLeft' && e.newValue) {
+        const newTimeLeft = parseInt(e.newValue, 10);
+        // Only update if the value from storage is different from current state
+        if (newTimeLeft !== timeLeft) {
+          setTimeLeft(newTimeLeft);
+        }
+      }
+      else if (e.key === 'pomodoroSound' && e.newValue) {
+        setCurrentSound(e.newValue);
+      }
+      else if (e.key === 'pomodoroFocusMode') {
+        setIsFocusModeEnabled(e.newValue === 'true');
+      }
+      else if (e.key === 'pomodoroFocusModeOptions' && e.newValue) {
+        try {
+          const parsedOptions = JSON.parse(e.newValue);
+          setFocusModeOptions(parsedOptions);
+        } catch (e) {
+          console.error('Failed to parse focus mode options from storage event:', e);
+        }
+      }
+      else if (e.key === 'pomodoroSequentialTaskView') {
+        setIsSequentialTaskView(e.newValue === 'true');
+      }
+      else if (e.key === 'pomodoroNotifications') {
+        setIsNotificationEnabled(e.newValue === 'true');
+      }
+      else if (e.key === 'pomodoroGamification' && e.newValue) {
+        try {
+          const parsedData = JSON.parse(e.newValue);
+          setGamificationData(parsedData);
+        } catch (e) {
+          console.error('Failed to parse gamification data from storage event:', e);
+        }
+      }
+      else if (e.key === 'pomodoroMusic') {
+        setCurrentMusic(e.newValue);
+      }
+      else if (e.key === 'pomodoroMusicPlaying') {
+        setIsMusicPlaying(e.newValue === 'true');
+      }
+      else if (e.key === 'pomodoroTheme' && e.newValue) {
+        try {
+          setCurrentTheme(JSON.parse(e.newValue));
+        } catch (e) {
+          console.error('Failed to parse theme from storage event:', e);
+        }
+      }
+      else if (e.key === 'pomodoroSessionHistory' && e.newValue) {
+        try {
+          const parsedHistory = JSON.parse(e.newValue);
+          // Convert string timestamps back to Date objects
+          const formattedHistory = parsedHistory.map((session: { type: TimerType; task: string; completed: boolean; timestamp: string }) => ({
+            ...session,
+            timestamp: new Date(session.timestamp)
+          }));
+          setSessionHistory(formattedHistory);
+        } catch (e) {
+          console.error('Failed to parse session history from storage event:', e);
+        }
+      }
+      else if (e.key === 'pomodoroTimerTheme' && e.newValue) {
+        try {
+          const parsedTheme = JSON.parse(e.newValue);
+          setCurrentTimerTheme(parsedTheme);
+          setCurrentTimerThemeId(parsedTheme.id);
+        } catch (e) {
+          console.error('Failed to parse timer theme from storage event:', e);
+        }
+      }
     };
 
-    setTasks(prevTasks => [...prevTasks, newTask]);
-    setCurrentTaskId(newTask.id);
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Handler for timer transition
+  const handleTimerChange = (newTimer: TimerType) => {
+    if (currentTimer !== newTimer) {
+      setPreviousTimer(currentTimer);
+      setTimerTransitionVisible(true);
+      setCurrentTimer(newTimer);
+
+      const newTime = newTimer === 'pomodoro'
+        ? pomodoroTime
+        : newTimer === 'shortBreak'
+          ? shortBreakTime
+          : longBreakTime;
+
+      setTimeLeft(newTime);
+      setIsActive(false);
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('pomodoroTimeLeft', newTime.toString());
+        localStorage.setItem('pomodoroCurrentTimer', newTimer);
+
+        // Notify other tabs about the timer change
+        if (tabSync) {
+          tabSync.sendMessage('TIMER_CHANGE', { timer: newTimer, time: newTime });
+        }
+      }
+    }
   };
 
-  // Get background color based on timer type and theme
-  const getBackgroundColor = () => {
-    // If focus mode is enabled, always use a dark background
-    if (isFocusModeEnabled) {
-      return 'bg-black text-white';
-    }
-
-    // Otherwise use the theme background or timer-specific background
-    return currentTheme.bgClass;
+  // Handle closing the timer transition animation
+  const handleTimerTransitionComplete = () => {
+    setTimerTransitionVisible(false);
   };
 
   // Update document title with timer
   useEffect(() => {
-    const timerPrefix = currentTimeFormatted ? `(${currentTimeFormatted}) ` : '';
+    const formattedTime = formatTime(timeLeft); // Format time here
+    const timerPrefix = formattedTime ? `(${formattedTime}) ` : '';
     document.title = `${timerPrefix}${getTimerLabel()} - Pomodoro Timer`;
-  }, [currentTimer, currentTimeFormatted, getTimerLabel]);
+  }, [timeLeft, getTimerLabel]); // Depend on timeLeft directly
 
-  // Handle timer updates
-  const handleTimeUpdate = useCallback((time: number, formattedTime: string) => {
-    setCurrentTimeFormatted(formattedTime);
+  // Handle timer updates from Timer component
+  const handleTimeUpdate = useCallback((time: number) => {
     setTimeLeft(time);
 
     // Save to localStorage for tab synchronization
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroTimeLeft', time.toString());
+
+      // Synchronize time across tabs every 5 seconds to avoid too many messages
+      if (tabSync && time % 5 === 0) {
+        tabSync.sendMessage('TIMER_UPDATE', { time });
+      }
     }
-  }, []);
+  }, [tabSync]); // Removed currentTimeFormatted dependency
 
   // Save state changes to localStorage
   useEffect(() => {
@@ -510,186 +842,13 @@ export default function PomodoroApp() {
     }
   }, [sessionHistory]);
 
-  // Client-side initialization
-  useEffect(() => {
-    // Mark that we're on the client side
-    isClient.current = true;
-
-    // Load data from localStorage
-    if (typeof window !== 'undefined') {
-      // Load timer type
-      const savedTimer = localStorage.getItem('pomodoroCurrentTimer');
-      if (savedTimer) {
-        setCurrentTimer(savedTimer as TimerType);
-      }
-
-      // Load active state
-      const savedActive = localStorage.getItem('pomodoroIsActive');
-      if (savedActive) {
-        setIsActive(savedActive === 'true');
-      }
-
-      // Load tasks
-      const savedTasks = localStorage.getItem('pomodoroTasks');
-      if (savedTasks) {
-        try {
-          setTasks(JSON.parse(savedTasks));
-        } catch (e) {
-          console.error('Failed to parse tasks from localStorage:', e);
-        }
-      }
-
-      // Load current task ID
-      const savedTaskId = localStorage.getItem('pomodoroCurrentTaskId');
-      if (savedTaskId) {
-        setCurrentTaskId(savedTaskId);
-      }
-
-      // Load completed pomodoros count
-      const savedCount = localStorage.getItem('pomodoroCompletedCount');
-      if (savedCount) {
-        setCompletedPomodoros(parseInt(savedCount, 10));
-      }
-
-      // Load time left
-      const savedTimeLeft = localStorage.getItem('pomodoroTimeLeft');
-      if (savedTimeLeft) {
-        setTimeLeft(parseInt(savedTimeLeft, 10));
-      } else {
-        // If no time left is saved, set it to the current timer duration
-        setTimeLeft(getCurrentTime());
-      }
-
-      // Load sound preference
-      const savedSound = localStorage.getItem('pomodoroSound');
-      if (savedSound) {
-        setCurrentSound(savedSound);
-      }
-
-      // Load focus mode preference
-      const savedFocusMode = localStorage.getItem('pomodoroFocusMode');
-      if (savedFocusMode) {
-        setIsFocusModeEnabled(savedFocusMode === 'true');
-      }
-
-      // Load notification preference
-      const savedNotification = localStorage.getItem('pomodoroNotifications');
-      if (savedNotification) {
-        setIsNotificationEnabled(savedNotification === 'true');
-      }
-
-      // Load gamification data
-      const savedGamification = localStorage.getItem('pomodoroGamification');
-      if (savedGamification) {
-        try {
-          const parsedData = JSON.parse(savedGamification);
-          setGamificationData(parsedData);
-        } catch (e) {
-          console.error('Failed to parse gamification data from localStorage:', e);
-        }
-      }
-
-      // Load theme preference
-      const savedTheme = localStorage.getItem('pomodoroTheme');
-      if (savedTheme) {
-        try {
-          setCurrentTheme(JSON.parse(savedTheme));
-        } catch (e) {
-          console.error('Failed to parse theme from localStorage:', e);
-        }
-      }
-
-      // Load session history
-      const savedSessionHistory = localStorage.getItem('pomodoroSessionHistory');
-      if (savedSessionHistory) {
-        try {
-          const parsedHistory = JSON.parse(savedSessionHistory);
-          // Convert string timestamps back to Date objects
-          const formattedHistory = parsedHistory.map((session: { type: TimerType; task: string; completed: boolean; timestamp: string }) => ({
-            ...session,
-            timestamp: new Date(session.timestamp)
-          }));
-          setSessionHistory(formattedHistory);
-        } catch (e) {
-          console.error('Failed to parse session history from localStorage:', e);
-        }
-      }
-    }
-  }, [getCurrentTime]);
-
-  // Listen for storage events from other tabs
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'pomodoroCurrentTimer' && e.newValue) {
-        setCurrentTimer(e.newValue as TimerType);
-      }
-      else if (e.key === 'pomodoroIsActive') {
-        setIsActive(e.newValue === 'true');
-      }
-      else if (e.key === 'pomodoroTasks' && e.newValue) {
-        setTasks(JSON.parse(e.newValue));
-      }
-      else if (e.key === 'pomodoroCurrentTaskId') {
-        setCurrentTaskId(e.newValue);
-      }
-      else if (e.key === 'pomodoroCompletedCount' && e.newValue) {
-        setCompletedPomodoros(parseInt(e.newValue, 10));
-      }
-      else if (e.key === 'pomodoroTimeLeft' && e.newValue) {
-        setTimeLeft(parseInt(e.newValue, 10));
-      }
-      else if (e.key === 'pomodoroSound' && e.newValue) {
-        setCurrentSound(e.newValue);
-      }
-      else if (e.key === 'pomodoroFocusMode') {
-        setIsFocusModeEnabled(e.newValue === 'true');
-      }
-      else if (e.key === 'pomodoroNotifications') {
-        setIsNotificationEnabled(e.newValue === 'true');
-      }
-      else if (e.key === 'pomodoroGamification' && e.newValue) {
-        try {
-          const parsedData = JSON.parse(e.newValue);
-          setGamificationData(parsedData);
-        } catch (e) {
-          console.error('Failed to parse gamification data from storage event:', e);
-        }
-      }
-      else if (e.key === 'pomodoroTheme' && e.newValue) {
-        try {
-          setCurrentTheme(JSON.parse(e.newValue));
-        } catch (e) {
-          console.error('Failed to parse theme from storage event:', e);
-        }
-      }
-      else if (e.key === 'pomodoroSessionHistory' && e.newValue) {
-        try {
-          const parsedHistory = JSON.parse(e.newValue);
-          // Convert string timestamps back to Date objects
-          const formattedHistory = parsedHistory.map((session: { type: TimerType; task: string; completed: boolean; timestamp: string }) => ({
-            ...session,
-            timestamp: new Date(session.timestamp)
-          }));
-          setSessionHistory(formattedHistory);
-        } catch (e) {
-          console.error('Failed to parse session history from storage event:', e);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
   return (
     <>
-      <div className={`min-h-screen ${getBackgroundColor()} transition-colors duration-500`}>
+      <div className={`min-h-screen ${currentTheme.bgClass} transition-colors duration-500`}>
         {isFocusModeEnabled ? (
           // Focus Mode - Only show the timer
           <div className="container mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-screen">
-            <motion.div 
+            <motion.div
               className="absolute top-4 right-4"
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -698,27 +857,28 @@ export default function PomodoroApp() {
               <FocusMode
                 onFocusModeChange={handleFocusModeChange}
                 isFocusModeEnabled={isFocusModeEnabled}
+                currentOptions={focusModeOptions}
               />
             </motion.div>
 
-            <motion.div 
+            <motion.div
               className="bg-gray-900/80 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8 max-w-md"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ 
+              transition={{
                 type: "spring",
                 stiffness: 260,
                 damping: 20
               }}
             >
-              <motion.h2 
+              <motion.h2
                 className="text-2xl font-bold text-center mb-6 flex items-center justify-center text-white"
-                animate={{ 
-                  color: currentTimer === 'pomodoro' 
-                    ? '#f43f5e' 
-                    : currentTimer === 'shortBreak' 
-                      ? '#10b981' 
-                      : '#0ea5e9' 
+                animate={{
+                  color: currentTimer === 'pomodoro'
+                    ? '#f43f5e'
+                    : currentTimer === 'shortBreak'
+                      ? '#10b981'
+                      : '#0ea5e9'
                 }}
                 transition={{ duration: 1 }}
               >
@@ -739,7 +899,7 @@ export default function PomodoroApp() {
               </motion.h2>
 
               {currentTask && (
-                <motion.div 
+                <motion.div
                   className="mb-4 text-center"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -761,6 +921,7 @@ export default function PomodoroApp() {
                 isActive={isActive}
                 onTimeUpdate={handleTimeUpdate}
                 initialTimeOverride={isClient.current && timeLeft > 0 ? timeLeft : undefined}
+                theme={currentTimerTheme}
               />
 
               <Controls
@@ -775,13 +936,13 @@ export default function PomodoroApp() {
         ) : (
           // Normal Mode - Show all components
           <div className="container mx-auto px-4 py-8">
-            <motion.header 
+            <motion.header
               className="text-center mb-8"
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <motion.h1 
+              <motion.h1
                 className="text-4xl font-bold mb-2"
                 initial={{ scale: 0.9 }}
                 animate={{ scale: 1 }}
@@ -791,67 +952,50 @@ export default function PomodoroApp() {
               </motion.h1>
               <div className="flex justify-center space-x-4 mb-4">
                 <button
-                  onClick={() => {
-                    setCurrentTimer('pomodoro');
-                    setTimeLeft(pomodoroTime);
-                    setIsActive(false);
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('pomodoroTimeLeft', pomodoroTime.toString());
-                    }
-                  }}
+                  onClick={() => handleTimerChange('pomodoro')}
                   className={`px-4 py-2 rounded-full cursor-pointer transition-colors ${
                     currentTimer === 'pomodoro'
                       ? `${currentTheme.primaryColor} text-white`
                       : 'bg-white/80 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700'
                   }`}
                 >
-                  Pomodoro
+                  <motion.span
+                    animate={{ scale: currentTimer === 'pomodoro' ? 1.05 : 1 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                  >
+                    Pomodoro
+                  </motion.span>
                 </button>
                 <button
-                  onClick={() => {
-                    setCurrentTimer('shortBreak');
-                    setTimeLeft(shortBreakTime);
-                    setIsActive(false);
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('pomodoroTimeLeft', shortBreakTime.toString());
-                    }
-                  }}
+                  onClick={() => handleTimerChange('shortBreak')}
                   className={`px-4 py-2 rounded-full cursor-pointer transition-colors ${
                     currentTimer === 'shortBreak'
                       ? `${currentTheme.secondaryColor} text-white`
                       : 'bg-white/80 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700'
                   }`}
                 >
-                  Short Break
+                  <motion.span
+                    animate={{ scale: currentTimer === 'shortBreak' ? 1.05 : 1 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                  >
+                    Short Break
+                  </motion.span>
                 </button>
                 <button
-                  onClick={() => {
-                    setCurrentTimer('longBreak');
-                    setTimeLeft(longBreakTime);
-                    setIsActive(false);
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('pomodoroTimeLeft', longBreakTime.toString());
-                    }
-                  }}
+                  onClick={() => handleTimerChange('longBreak')}
                   className={`px-4 py-2 rounded-full cursor-pointer transition-colors ${
                     currentTimer === 'longBreak'
                       ? `${currentTheme.accentColor} text-white`
                       : 'bg-white/80 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700'
                   }`}
                 >
-                  Long Break
+                  <motion.span
+                    animate={{ scale: currentTimer === 'longBreak' ? 1.05 : 1 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                  >
+                    Long Break
+                  </motion.span>
                 </button>
-              </div>
-
-              <div className="flex flex-wrap justify-center gap-2 mb-4">
-                <FocusMode
-                  onFocusModeChange={handleFocusModeChange}
-                  isFocusModeEnabled={isFocusModeEnabled}
-                />
-                <NotificationSettings
-                  onNotificationChange={handleNotificationChange}
-                  isNotificationEnabled={isNotificationEnabled}
-                />
               </div>
 
               <div className="flex flex-wrap justify-center gap-3 mb-4">
@@ -865,31 +1009,75 @@ export default function PomodoroApp() {
                   currentThemeId={currentTheme.id}
                 />
 
-                <button
-                  onClick={toggleStatistics}
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 transition-colors cursor-pointer"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  Statistics
-                </button>
+                <TimerThemeSelector
+                  onThemeChange={handleTimerThemeChange}
+                  currentThemeId={currentTimerThemeId}
+                />
+
+                <ToolsMenu
+                  // Focus Mode
+                  onFocusModeChange={handleFocusModeChange}
+                  onFocusModeOptionsChange={handleFocusModeOptionsChange}
+                  isFocusModeEnabled={isFocusModeEnabled}
+                  currentFocusModeOptions={focusModeOptions}
+
+                  // Notifications
+                  onNotificationChange={handleNotificationChange}
+                  isNotificationEnabled={isNotificationEnabled}
+
+                  // Background Music
+                  onMusicChange={handleMusicChange}
+                  currentMusic={currentMusic}
+                  isMusicPlaying={isMusicPlaying}
+                  onMusicPlayingChange={handleMusicPlayingChange}
+
+                  // Zen Mode
+                  isZenModeActive={false}
+                  onZenModeToggle={() => {}}
+                  remainingTime={timeLeft}
+                  totalTime={getCurrentTime()}
+
+                  // Custom Theme
+                  customThemeColors={undefined}
+                  onCustomThemeChange={() => {}}
+
+                  // Calendar Integration
+                  onCalendarEventSelect={() => {}}
+
+                  // Excel Export
+                  tasks={tasks}
+                  sessionHistory={sessionHistory}
+                  pomodoroTime={pomodoroTime}
+                  shortBreakTime={shortBreakTime}
+                  longBreakTime={longBreakTime}
+                />
+
+                <SettingsMenu
+                  onStatisticsClick={toggleStatistics}
+                  onSettingsClick={toggleSettings}
+                />
+
+                <TabSyncIndicator
+                  tabSync={tabSync}
+                />
 
                 <button
-                  onClick={toggleSettings}
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 transition-colors cursor-pointer"
+                  onClick={() => setIsSequentialTaskView(!isSequentialTaskView)}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 transition-colors cursor-pointer ${
+                    isSequentialTaskView ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700' : ''
+                  }`}
+                  title={isSequentialTaskView ? "Switch to normal task view" : "Switch to sequential task view"}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                   </svg>
-                  Timer Settings
+                  {isSequentialTaskView ? 'Task List' : 'Sequential Tasks'}
                 </button>
               </div>
             </motion.header>
 
             <div className="max-w-2xl mx-auto">
-              <motion.main 
+              <motion.main
                 className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -912,7 +1100,7 @@ export default function PomodoroApp() {
                   {getTimerLabel()}
                 </h2>
 
-                <TaskInput onTaskChange={handleTaskInputChange} currentTask={currentTask} />
+                <TaskInput onTaskChange={() => {}} currentTask={currentTask} />
 
                 <Timer
                   initialTime={getCurrentTime()}
@@ -920,8 +1108,10 @@ export default function PomodoroApp() {
                   isActive={isActive}
                   onTimeUpdate={handleTimeUpdate}
                   initialTimeOverride={isClient.current && timeLeft > 0 ? timeLeft : undefined}
+                  theme={currentTimerTheme}
                 />
 
+                {(!isFocusModeEnabled || !focusModeOptions.hideControls) && (
                 <Controls
                   isActive={isActive}
                   onStart={startTimer}
@@ -929,6 +1119,7 @@ export default function PomodoroApp() {
                   onReset={resetTimer}
                   onSkip={skipTimer}
                 />
+                )}
 
                 <div className="mt-6 text-center">
                   <div className="flex flex-col md:flex-row justify-center items-center gap-4">
@@ -970,15 +1161,28 @@ export default function PomodoroApp() {
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4, duration: 0.5 }}
+                className={isFocusModeEnabled && focusModeOptions.hideTaskList ? 'hidden' : ''}
               >
-                <TaskList
-                  tasks={tasks}
-                  currentTaskId={currentTaskId}
-                  onTaskSelect={handleTaskSelect}
-                  onTaskAdd={handleTaskAdd}
-                  onTaskUpdate={handleTaskUpdate}
-                  onTaskDelete={handleTaskDelete}
-                />
+                {isSequentialTaskView ? (
+                  <SequentialTaskList
+                    tasks={tasks}
+                    currentTaskId={currentTaskId}
+                    onTaskSelect={() => {}}
+                    onTasksReorder={handleTasksReorder}
+                    onTaskUpdate={() => {}}
+                    onTaskDelete={() => {}}
+                    completedPomodoros={completedPomodoros}
+                  />
+                ) : (
+                  <TaskList
+                    tasks={tasks}
+                    currentTaskId={currentTaskId}
+                    onTaskSelect={() => {}}
+                    onTaskAdd={() => {}}
+                    onTaskUpdate={() => {}}
+                    onTaskDelete={() => {}}
+                  />
+                )}
               </motion.div>
             </div>
           </div>
@@ -1040,6 +1244,25 @@ export default function PomodoroApp() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Break Reminder */}
+      <BreakReminder
+        isBreakTime={currentTimer !== 'pomodoro'}
+        breakDuration={currentTimer === 'shortBreak' ? shortBreakTime : longBreakTime}
+      />
+
+      <TimeCompleteAnimation
+        isVisible={timeCompleteVisible}
+        type={currentTimer}
+        onClose={handleTimeCompleteClose}
+      />
+
+      <TimerTransition
+        previousTimer={previousTimer}
+        currentTimer={currentTimer}
+        isVisible={timerTransitionVisible}
+        onComplete={handleTimerTransitionComplete}
+      />
     </>
   );
 }

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pomodoro Logo Preview</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+    .logo-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 40px;
+    }
+    .logo {
+      width: 300px;
+      height: 300px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border-radius: 20px;
+      background-color: white;
+      padding: 20px;
+    }
+    .sizes-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      max-width: 800px;
+    }
+    .size-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: white;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    .size-item img {
+      margin-bottom: 10px;
+    }
+    .size-label {
+      font-size: 14px;
+      color: #666;
+    }
+    .note {
+      margin-top: 30px;
+      padding: 15px;
+      background-color: #e6f7ff;
+      border-left: 4px solid #1890ff;
+      border-radius: 4px;
+      max-width: 600px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pomodoro Timer Logo Preview</h1>
+
+  <div class="logo-container">
+    <div class="logo">
+      <img src="logo-simple.svg" alt="Pomodoro Timer Logo" width="100%" height="100%">
+    </div>
+    <p>SVG Original (Vector) - Simplified Version</p>
+  </div>
+
+  <div class="logo-container">
+    <div class="logo">
+      <img src="logo.svg" alt="Pomodoro Timer Logo (Original)" width="100%" height="100%">
+    </div>
+    <p>SVG Original (Vector) - Detailed Version</p>
+  </div>
+
+  <h2>PNG Versions (After Conversion)</h2>
+  <div class="sizes-container">
+    <div class="size-item">
+      <img src="icons/icon-72.png" alt="72x72" width="72" height="72">
+      <span class="size-label">72x72</span>
+    </div>
+    <div class="size-item">
+      <img src="icons/icon-96.png" alt="96x96" width="96" height="96">
+      <span class="size-label">96x96</span>
+    </div>
+    <div class="size-item">
+      <img src="icons/icon-128.png" alt="128x128" width="128" height="128">
+      <span class="size-label">128x128</span>
+    </div>
+    <div class="size-item">
+      <img src="icons/icon-144.png" alt="144x144" width="144" height="144">
+      <span class="size-label">144x144</span>
+    </div>
+    <div class="size-item">
+      <img src="icons/icon-152.png" alt="152x152" width="152" height="152">
+      <span class="size-label">152x152</span>
+    </div>
+    <div class="size-item">
+      <img src="icons/icon-192.png" alt="192x192" width="192" height="192">
+      <span class="size-label">192x192</span>
+    </div>
+  </div>
+
+  <div class="note">
+    <p><strong>Note:</strong> To see the PNG versions, you need to run one of the conversion scripts:</p>
+    <ul>
+      <li>Direct SVG creation: <code>npm run convert-logo:direct</code> (creates SVG files that can be manually converted to PNG)</li>
+      <li>Canvas-based conversion: <code>npm run convert-logo:canvas</code> (requires Node.js with canvas package)</li>
+      <li>PowerShell script: <code>.\scripts\convert-logo.ps1</code> (requires Inkscape)</li>
+      <li>Node.js script with sharp: <code>npm run convert-logo</code> (requires Node.js with sharp and fs-extra packages)</li>
+    </ul>
+    <p><strong>If you're having issues with PNG conversion:</strong> Use the direct SVG method and manually convert the SVGs to PNGs using a browser or image editor.</p>
+  </div>
+</body>
+</html>

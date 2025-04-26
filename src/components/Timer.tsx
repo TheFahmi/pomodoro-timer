@@ -1,39 +1,73 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { TimerTheme } from './TimerThemeSelector';
 
 interface TimerProps {
   initialTime: number;
   isActive: boolean;
   onComplete: () => void;
-  onTimeUpdate: (time: number, formattedTime: string) => void;
+  onTimeUpdate: (time: number) => void;
   initialTimeOverride?: number;
+  theme?: TimerTheme;
 }
+
+// Format time as MM:SS
+const formatTime = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+// Komponen untuk animasi digit
+const TimerDigit = ({ digit, bgColor, textColor }: { digit: string; bgColor: string; textColor: string }) => (
+  <div className={`relative w-12 h-16 inline-block overflow-hidden ${bgColor}`}>
+    <AnimatePresence mode="popLayout">
+      <motion.span
+        key={digit}
+        className={`absolute inset-0 flex items-center justify-center ${textColor}`}
+        initial={{ y: -10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 10, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      >
+        {digit}
+      </motion.span>
+    </AnimatePresence>
+  </div>
+);
 
 export default function Timer({ 
   initialTime, 
   isActive, 
   onComplete, 
   onTimeUpdate,
-  initialTimeOverride 
+  initialTimeOverride,
+  theme
 }: TimerProps) {
   // Use initialTimeOverride if provided, otherwise use initialTime
   const [timeLeft, setTimeLeft] = useState(initialTimeOverride ?? initialTime);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const prevTimeRef = useRef<string>(formatTime(timeLeft));
 
-  // Format time as MM:SS
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  // Menggunakan tema default jika tidak ada tema yang diberikan
+  const defaultTheme: TimerTheme = {
+    id: 'default',
+    name: 'Default',
+    progressColor: 'text-indigo-600 dark:text-indigo-500',
+    backgroundColor: 'bg-gray-200 dark:bg-gray-700',
+    textColor: 'text-gray-900 dark:text-white',
+    digitBgColor: 'bg-transparent'
   };
+
+  const currentTheme = theme || defaultTheme;
 
   // Reset timer when initialTime changes
   useEffect(() => {
     if (!isActive && initialTimeOverride === undefined) {
       setTimeLeft(initialTime);
-      onTimeUpdate(initialTime, formatTime(initialTime));
+      onTimeUpdate(initialTime);
     }
   }, [initialTime, isActive, onTimeUpdate, initialTimeOverride]);
 
@@ -41,7 +75,7 @@ export default function Timer({
   useEffect(() => {
     if (initialTimeOverride !== undefined) {
       setTimeLeft(initialTimeOverride);
-      onTimeUpdate(initialTimeOverride, formatTime(initialTimeOverride));
+      onTimeUpdate(initialTimeOverride);
     }
   }, [initialTimeOverride, onTimeUpdate]);
 
@@ -53,7 +87,7 @@ export default function Timer({
           const newTime = prev - 1;
           
           // Update parent with new time
-          onTimeUpdate(newTime, formatTime(newTime));
+          // onTimeUpdate(newTime, formatTime(newTime)); // Memicu update state selama render
           
           if (newTime <= 0) {
             // Timer complete
@@ -75,8 +109,25 @@ export default function Timer({
     };
   }, [isActive, onComplete, onTimeUpdate]);
 
+  // Separate effect to notify parent of time changes
+  useEffect(() => {
+    // Only notify parent when time changes and not during initial render
+    if (timeLeft !== initialTimeOverride && timeLeft !== initialTime) {
+      onTimeUpdate(timeLeft);
+    }
+  }, [timeLeft, onTimeUpdate, initialTime, initialTimeOverride]);
+
   // Calculate progress percentage
   const progress = (timeLeft / initialTime) * 100;
+  
+  // Format time string untuk animasi
+  const timeString = formatTime(timeLeft);
+  const timeDigits = timeString.split('');
+  
+  // Perbarui referensi waktu sebelumnya
+  useEffect(() => {
+    prevTimeRef.current = timeString;
+  }, [timeString]);
   
   return (
     <div className="flex flex-col items-center">
@@ -87,7 +138,7 @@ export default function Timer({
         transition={{ type: "spring", stiffness: 300, damping: 20 }}
       >
         {/* Progress circle background */}
-        <div className="absolute inset-0 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+        <div className={`absolute inset-0 rounded-full ${currentTheme.backgroundColor}`}></div>
         
         {/* Progress circle fill */}
         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
@@ -98,7 +149,7 @@ export default function Timer({
             fill="none"
             strokeWidth="4"
             stroke="currentColor"
-            className="text-indigo-600 dark:text-indigo-500"
+            className={currentTheme.progressColor}
             strokeLinecap="round"
             strokeDasharray="301.6"
             initial={{ strokeDashoffset: 301.6 }}
@@ -110,23 +161,37 @@ export default function Timer({
           />
         </svg>
         
-        {/* Timer display */}
+        {/* Timer display dengan animasi per digit */}
         <motion.div 
-          className="text-5xl font-bold relative z-10"
+          className="text-5xl font-bold relative z-10 flex"
           animate={{ 
-            scale: isActive ? [1, 1.03, 1] : 1,
-            color: timeLeft < 10 ? '#ef4444' : '#000000' 
+            color: timeLeft < 10 ? '#ef4444' : 'inherit' 
           }}
           transition={{ 
-            scale: { 
-              repeat: isActive ? Infinity : 0, 
-              duration: 2,
-              repeatType: "reverse"
-            },
             color: { duration: 0.3 }
           }}
         >
-          {formatTime(timeLeft)}
+          <TimerDigit 
+            digit={timeDigits[0]} 
+            bgColor={currentTheme.digitBgColor}
+            textColor={currentTheme.textColor}
+          />
+          <TimerDigit 
+            digit={timeDigits[1]} 
+            bgColor={currentTheme.digitBgColor}
+            textColor={currentTheme.textColor}
+          />
+          <div className={`w-4 flex items-center justify-center ${currentTheme.textColor}`}>:</div>
+          <TimerDigit 
+            digit={timeDigits[3]} 
+            bgColor={currentTheme.digitBgColor}
+            textColor={currentTheme.textColor}
+          />
+          <TimerDigit 
+            digit={timeDigits[4]} 
+            bgColor={currentTheme.digitBgColor}
+            textColor={currentTheme.textColor}
+          />
         </motion.div>
       </motion.div>
     </div>

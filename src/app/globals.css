@@ -68,3 +68,25 @@ body {
 .colon-blink {
   animation: blinkColon 1s ease-in-out infinite;
 }
+
+/* Add cursor pointer to all buttons and interactive elements */
+button,
+.btn,
+[role="button"],
+a,
+.cursor-pointer,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  cursor: pointer !important;
+}
+
+/* Force cursor pointer on all buttons */
+html button {
+  cursor: pointer !important;
+}
+
+/* Specific styles for controls */
+.controls-button {
+  cursor: pointer !important;
+}

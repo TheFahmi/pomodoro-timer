@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pomodoro Timer App
 
-## Getting Started
+A web-based productivity tool that helps you implement the Pomodoro technique for focusing and taking breaks at regular intervals. This application is developed with Next.js and can be installed as a Progressive Web App (PWA) for offline use.
 
-First, run the development server:
+![Pomodoro Timer](public/screenshots/screenshot1.png)
+
+## Key Features
+
+- ⏱️ Timers for focus time (Pomodoro), short break, and long break
+- 🔄 Automatic transitions between sessions according to the Pomodoro technique
+- ✅ Task management with drag-and-drop system
+- 📊 Statistics and session history
+- 🔔 Notifications when timer completes
+- 🎵 Notification sound options and background music
+- 🎯 Gamification with achievements for motivation
+- 🌙 Focus mode to eliminate distractions
+- 🎨 Various themes for timer and UI
+- 🔄 Synchronization across browser tabs
+- 📱 Progressive Web App (PWA) for offline use
+
+## Installation
 
 ```bash
+# Clone repository
+git clone https://github.com/thefahmi/pomodoro-timer.git
+cd pomodoro-timer
+
+# Install dependencies
+npm install
+
+# Run in development mode
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Build for production
+npm run build
+
+# Run production version (to test PWA)
+npm run start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Usage
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Open the application in your browser
+2. Start a Pomodoro session with the Play button
+3. Work on your tasks for 25 minutes (default)
+4. When the timer ends, start your break time
+5. Repeat the cycle for maximum productivity
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Using as PWA
 
-## Learn More
+To use the application as a PWA:
 
-To learn more about Next.js, take a look at the following resources:
+1. Open the application in your browser (Chrome/Edge recommended)
+2. Look for the installation icon in the address bar or browser menu
+3. Click "Install" to add the application to your desktop/home screen
+4. The application can be used even when offline
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Technologies
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Next.js
+- React
+- Framer Motion
+- Tailwind CSS
+- next-pwa
+- Workbox
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+MIT License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Contribution
+
+Contributions, issues, and pull requests are welcome. Please create an issue first for discussion before making major changes.

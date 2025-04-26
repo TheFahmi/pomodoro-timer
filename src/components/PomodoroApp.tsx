@@ -6,6 +6,10 @@ import Controls from './Controls';
 import Settings from './Settings';
 import TaskInput from './TaskInput';
 import TaskList, { Task } from './TaskList';
+import SoundOptions from './SoundOptions';
+import FocusMode from './FocusMode';
+import ThemeSelector, { Theme } from './ThemeSelector';
+import MotivationalQuote from './MotivationalQuote';
 
 // Timer types
 type TimerType = 'pomodoro' | 'shortBreak' | 'longBreak';
@@ -42,9 +46,21 @@ export default function PomodoroApp() {
     : '';
 
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
-  const [sessionHistory, setSessionHistory] = useState<SessionHistory[]>([]);
+  const [, setSessionHistory] = useState<SessionHistory[]>([]);
   const [currentTimeFormatted, setCurrentTimeFormatted] = useState('');
   const [timeLeft, setTimeLeft] = useState<number>(0);
+
+  // New feature states
+  const [currentSound, setCurrentSound] = useState('notification');
+  const [isFocusModeEnabled, setIsFocusModeEnabled] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<Theme>({
+    id: 'default',
+    name: 'Default',
+    primaryColor: 'bg-indigo-600',
+    secondaryColor: 'bg-rose-600',
+    accentColor: 'bg-emerald-600',
+    bgClass: 'bg-gray-50 dark:bg-gray-900',
+  });
 
   // Get current timer duration based on type
   const getCurrentTime = useCallback(() => {
@@ -62,8 +78,27 @@ export default function PomodoroApp() {
 
   // Handle timer completion
   const handleTimerComplete = useCallback(() => {
-    // Play sound
-    const audio = new Audio('/notification.mp3');
+    // Play selected sound
+    let soundPath = '/sounds/notification.mp3'; // Default sound
+
+    // Map sound ID to file path
+    switch (currentSound) {
+      case 'bell':
+        soundPath = '/sounds/bell.mp3';
+        break;
+      case 'digital':
+        soundPath = '/sounds/digital.mp3';
+        break;
+      case 'chime':
+        soundPath = '/sounds/chime.mp3';
+        break;
+      case 'notification':
+      default:
+        soundPath = '/sounds/notification.mp3';
+        break;
+    }
+
+    const audio = new Audio(soundPath);
     audio.play().catch(err => console.error('Failed to play sound:', err));
 
     // Add to history
@@ -128,7 +163,7 @@ export default function PomodoroApp() {
 
     // Stop the timer
     setIsActive(false);
-  }, [currentTimer, currentTask, completedPomodoros, pomodoroTime, shortBreakTime, longBreakTime]);
+  }, [currentTimer, currentTask, completedPomodoros, pomodoroTime, shortBreakTime, longBreakTime, currentSound]);
 
   // Timer controls
   const startTimer = () => setIsActive(true);
@@ -196,6 +231,30 @@ export default function PomodoroApp() {
 
   // Settings controls
   const toggleSettings = () => setSettingsOpen(!settingsOpen);
+
+  // Sound options handler
+  const handleSoundChange = (sound: string) => {
+    setCurrentSound(sound);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroSound', sound);
+    }
+  };
+
+  // Focus mode handler
+  const handleFocusModeChange = (isEnabled: boolean) => {
+    setIsFocusModeEnabled(isEnabled);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroFocusMode', isEnabled.toString());
+    }
+  };
+
+  // Theme handler
+  const handleThemeChange = (theme: Theme) => {
+    setCurrentTheme(theme);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroTheme', JSON.stringify(theme));
+    }
+  };
 
   // Task list handlers
   const handleTaskAdd = (task: Task) => {
@@ -272,18 +331,15 @@ export default function PomodoroApp() {
     }
   };
 
-  // Get background color based on timer type
+  // Get background color based on timer type and theme
   const getBackgroundColor = () => {
-    switch (currentTimer) {
-      case 'pomodoro':
-        return 'bg-rose-50 dark:bg-rose-950';
-      case 'shortBreak':
-        return 'bg-emerald-50 dark:bg-emerald-950';
-      case 'longBreak':
-        return 'bg-sky-50 dark:bg-sky-950';
-      default:
-        return 'bg-gray-100 dark:bg-gray-950';
+    // If focus mode is enabled, always use a dark background
+    if (isFocusModeEnabled) {
+      return 'bg-black text-white';
     }
+
+    // Otherwise use the theme background or timer-specific background
+    return currentTheme.bgClass;
   };
 
   // Update document title with timer
@@ -387,6 +443,28 @@ export default function PomodoroApp() {
         // If no time left is saved, set it to the current timer duration
         setTimeLeft(getCurrentTime());
       }
+
+      // Load sound preference
+      const savedSound = localStorage.getItem('pomodoroSound');
+      if (savedSound) {
+        setCurrentSound(savedSound);
+      }
+
+      // Load focus mode preference
+      const savedFocusMode = localStorage.getItem('pomodoroFocusMode');
+      if (savedFocusMode) {
+        setIsFocusModeEnabled(savedFocusMode === 'true');
+      }
+
+      // Load theme preference
+      const savedTheme = localStorage.getItem('pomodoroTheme');
+      if (savedTheme) {
+        try {
+          setCurrentTheme(JSON.parse(savedTheme));
+        } catch (e) {
+          console.error('Failed to parse theme from localStorage:', e);
+        }
+      }
     }
   }, [getCurrentTime]);
 
@@ -413,6 +491,19 @@ export default function PomodoroApp() {
       else if (e.key === 'pomodoroTimeLeft' && e.newValue) {
         setTimeLeft(parseInt(e.newValue, 10));
       }
+      else if (e.key === 'pomodoroSound' && e.newValue) {
+        setCurrentSound(e.newValue);
+      }
+      else if (e.key === 'pomodoroFocusMode') {
+        setIsFocusModeEnabled(e.newValue === 'true');
+      }
+      else if (e.key === 'pomodoroTheme' && e.newValue) {
+        try {
+          setCurrentTheme(JSON.parse(e.newValue));
+        } catch (e) {
+          console.error('Failed to parse theme from storage event:', e);
+        }
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -420,143 +511,242 @@ export default function PomodoroApp() {
   }, []);
 
   return (
-    <div className={`min-h-screen ${getBackgroundColor()} transition-colors duration-500`}>
-      <div className="container mx-auto px-4 py-8">
-        <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2">Pomodoro Timer</h1>
-          <div className="flex justify-center space-x-4 mb-4">
-            <button
-              onClick={() => {
-                setCurrentTimer('pomodoro');
-                setTimeLeft(pomodoroTime);
-                setIsActive(false);
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('pomodoroTimeLeft', pomodoroTime.toString());
-                }
-              }}
-              className={`px-4 py-2 rounded-full cursor-pointer transition-colors ${currentTimer === 'pomodoro' ? 'bg-rose-600 text-white' : 'bg-white/80 hover:bg-rose-100 dark:bg-gray-800 dark:hover:bg-rose-900'}`}
-            >
-              Pomodoro
-            </button>
-            <button
-              onClick={() => {
-                setCurrentTimer('shortBreak');
-                setTimeLeft(shortBreakTime);
-                setIsActive(false);
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('pomodoroTimeLeft', shortBreakTime.toString());
-                }
-              }}
-              className={`px-4 py-2 rounded-full cursor-pointer transition-colors ${currentTimer === 'shortBreak' ? 'bg-emerald-600 text-white' : 'bg-white/80 hover:bg-emerald-100 dark:bg-gray-800 dark:hover:bg-emerald-900'}`}
-            >
-              Short Break
-            </button>
-            <button
-              onClick={() => {
-                setCurrentTimer('longBreak');
-                setTimeLeft(longBreakTime);
-                setIsActive(false);
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('pomodoroTimeLeft', longBreakTime.toString());
-                }
-              }}
-              className={`px-4 py-2 rounded-full cursor-pointer transition-colors ${currentTimer === 'longBreak' ? 'bg-sky-600 text-white' : 'bg-white/80 hover:bg-sky-100 dark:bg-gray-800 dark:hover:bg-sky-900'}`}
-            >
-              Long Break
-            </button>
-          </div>
-          <button
-            onClick={toggleSettings}
-            className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Settings
-          </button>
-        </header>
+    <>
+      <div className={`min-h-screen ${getBackgroundColor()} transition-colors duration-500`}>
+        {isFocusModeEnabled ? (
+          // Focus Mode - Only show the timer
+          <div className="container mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-screen">
+            <div className="absolute top-4 right-4">
+              <FocusMode
+                onFocusModeChange={handleFocusModeChange}
+                isFocusModeEnabled={isFocusModeEnabled}
+              />
+            </div>
 
-        <div className="max-w-2xl mx-auto">
-          <main className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8">
-          <h2 className="text-2xl font-bold text-center mb-6 flex items-center justify-center">
-            {currentTimer === 'pomodoro' ? (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            ) : currentTimer === 'shortBreak' ? (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
-            )}
-            {getTimerLabel()}
-          </h2>
-
-          <TaskInput onTaskChange={handleTaskInputChange} currentTask={currentTask} />
-
-          <Timer
-            initialTime={getCurrentTime()}
-            onComplete={handleTimerComplete}
-            isActive={isActive}
-            onTimeUpdate={handleTimeUpdate}
-            initialTimeOverride={isClient.current && timeLeft > 0 ? timeLeft : undefined}
-          />
-
-          <Controls
-            isActive={isActive}
-            onStart={startTimer}
-            onPause={pauseTimer}
-            onReset={resetTimer}
-            onSkip={skipTimer}
-          />
-
-          <div className="mt-6 text-center">
-            <div className="flex flex-col md:flex-row justify-center items-center gap-4">
-              <div className="bg-gray-100 dark:bg-gray-700/50 px-4 py-2 rounded-full text-gray-600 dark:text-gray-300 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                </svg>
-                <span className="font-medium">Completed Pomodoros:</span> {completedPomodoros}
-              </div>
+            <div className="bg-gray-900/80 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8 max-w-md">
+              <h2 className="text-2xl font-bold text-center mb-6 flex items-center justify-center text-white">
+                {currentTimer === 'pomodoro' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ) : currentTimer === 'shortBreak' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                  </svg>
+                )}
+                {getTimerLabel()}
+              </h2>
 
               {currentTask && (
-                <div className="bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full text-indigo-700 dark:text-indigo-300 flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
-                  </svg>
-                  <span className="font-medium">Current Task:</span> {currentTask}
+                <div className="mb-4 text-center">
+                  <div className="inline-flex items-center bg-gray-800 px-4 py-2 rounded-full text-gray-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                      <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                    </svg>
+                    <span className="font-medium">Current Task:</span> {currentTask}
+                  </div>
                 </div>
               )}
+
+              <Timer
+                initialTime={getCurrentTime()}
+                onComplete={handleTimerComplete}
+                isActive={isActive}
+                onTimeUpdate={handleTimeUpdate}
+                initialTimeOverride={isClient.current && timeLeft > 0 ? timeLeft : undefined}
+              />
+
+              <Controls
+                isActive={isActive}
+                onStart={startTimer}
+                onPause={pauseTimer}
+                onReset={resetTimer}
+                onSkip={skipTimer}
+              />
             </div>
           </div>
-          </main>
+        ) : (
+          // Normal Mode - Show all components
+          <div className="container mx-auto px-4 py-8">
+            <header className="text-center mb-8">
+              <h1 className="text-4xl font-bold mb-2">Pomodoro Timer</h1>
+              <div className="flex justify-center space-x-4 mb-4">
+                <button
+                  onClick={() => {
+                    setCurrentTimer('pomodoro');
+                    setTimeLeft(pomodoroTime);
+                    setIsActive(false);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('pomodoroTimeLeft', pomodoroTime.toString());
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-full cursor-pointer transition-colors ${
+                    currentTimer === 'pomodoro'
+                      ? `${currentTheme.primaryColor} text-white`
+                      : 'bg-white/80 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  Pomodoro
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentTimer('shortBreak');
+                    setTimeLeft(shortBreakTime);
+                    setIsActive(false);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('pomodoroTimeLeft', shortBreakTime.toString());
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-full cursor-pointer transition-colors ${
+                    currentTimer === 'shortBreak'
+                      ? `${currentTheme.secondaryColor} text-white`
+                      : 'bg-white/80 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  Short Break
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentTimer('longBreak');
+                    setTimeLeft(longBreakTime);
+                    setIsActive(false);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('pomodoroTimeLeft', longBreakTime.toString());
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-full cursor-pointer transition-colors ${
+                    currentTimer === 'longBreak'
+                      ? `${currentTheme.accentColor} text-white`
+                      : 'bg-white/80 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  Long Break
+                </button>
+              </div>
 
-          <TaskList
-            tasks={tasks}
-            currentTaskId={currentTaskId}
-            onTaskSelect={handleTaskSelect}
-            onTaskAdd={handleTaskAdd}
-            onTaskUpdate={handleTaskUpdate}
-            onTaskDelete={handleTaskDelete}
-          />
-        </div>
+              <div className="flex flex-wrap justify-center gap-2 mb-4">
+                <FocusMode
+                  onFocusModeChange={handleFocusModeChange}
+                  isFocusModeEnabled={isFocusModeEnabled}
+                />
+              </div>
 
-        <Settings
-          pomodoroTime={pomodoroTime}
-          shortBreakTime={shortBreakTime}
-          longBreakTime={longBreakTime}
-          onPomodoroTimeChange={setPomodoroTime}
-          onShortBreakTimeChange={setShortBreakTime}
-          onLongBreakTimeChange={setLongBreakTime}
-          isOpen={settingsOpen}
-          onClose={toggleSettings}
-        />
+              <div className="flex flex-wrap justify-center gap-3 mb-4">
+                <SoundOptions
+                  onSoundChange={handleSoundChange}
+                  currentSound={currentSound}
+                />
+
+                <ThemeSelector
+                  onThemeChange={handleThemeChange}
+                  currentThemeId={currentTheme.id}
+                />
+
+                <button
+                  onClick={toggleSettings}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 transition-colors cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Timer Settings
+                </button>
+              </div>
+            </header>
+
+            <div className="max-w-2xl mx-auto">
+              <main className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8">
+              <h2 className="text-2xl font-bold text-center mb-6 flex items-center justify-center">
+                {currentTimer === 'pomodoro' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ) : currentTimer === 'shortBreak' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                  </svg>
+                )}
+                {getTimerLabel()}
+              </h2>
+
+              <TaskInput onTaskChange={handleTaskInputChange} currentTask={currentTask} />
+
+              <Timer
+                initialTime={getCurrentTime()}
+                onComplete={handleTimerComplete}
+                isActive={isActive}
+                onTimeUpdate={handleTimeUpdate}
+                initialTimeOverride={isClient.current && timeLeft > 0 ? timeLeft : undefined}
+              />
+
+              <Controls
+                isActive={isActive}
+                onStart={startTimer}
+                onPause={pauseTimer}
+                onReset={resetTimer}
+                onSkip={skipTimer}
+              />
+
+              <div className="mt-6 text-center">
+                <div className="flex flex-col md:flex-row justify-center items-center gap-4">
+                  <div className="bg-gray-100 dark:bg-gray-700/50 px-4 py-2 rounded-full text-gray-600 dark:text-gray-300 flex items-center cursor-default">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                    </svg>
+                    <span className="font-medium">Completed Pomodoros:</span> {completedPomodoros}
+                  </div>
+
+                  {currentTask && (
+                    <div className="bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full text-indigo-700 dark:text-indigo-300 flex items-center cursor-default">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                        <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-medium">Current Task:</span> {currentTask}
+                    </div>
+                  )}
+                </div>
+              </div>
+              </main>
+
+              {/* Motivational quote - only show during breaks or when focus mode is off */}
+              {(currentTimer !== 'pomodoro' || !isFocusModeEnabled) && (
+                <MotivationalQuote isBreak={currentTimer !== 'pomodoro'} />
+              )}
+
+              <TaskList
+                tasks={tasks}
+                currentTaskId={currentTaskId}
+                onTaskSelect={handleTaskSelect}
+                onTaskAdd={handleTaskAdd}
+                onTaskUpdate={handleTaskUpdate}
+                onTaskDelete={handleTaskDelete}
+              />
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+
+      <Settings
+        pomodoroTime={pomodoroTime}
+        shortBreakTime={shortBreakTime}
+        longBreakTime={longBreakTime}
+        onPomodoroTimeChange={setPomodoroTime}
+        onShortBreakTimeChange={setShortBreakTime}
+        onLongBreakTimeChange={setLongBreakTime}
+        isOpen={settingsOpen}
+        onClose={toggleSettings}
+      />
+    </>
   );
 }

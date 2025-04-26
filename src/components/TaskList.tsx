@@ -82,10 +82,10 @@ export default function TaskList({
                 key={task.id}
                 className={`p-3 rounded-lg transition-colors ${
                   task.completed
-                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default'
                     : currentTaskId === task.id
-                    ? 'bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800'
-                    : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    ? 'bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 cursor-default'
+                    : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -117,7 +117,8 @@ export default function TaskList({
                           currentTaskId === task.id
                             ? 'bg-indigo-500 text-white'
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
-                        } cursor-pointer`}
+                        } cursor-pointer transition-colors`}
+                        title={currentTaskId === task.id ? 'Current task' : 'Start this task'}
                       >
                         {currentTaskId === task.id ? 'Current' : 'Start'}
                       </button>
@@ -125,7 +126,8 @@ export default function TaskList({
 
                     <button
                       onClick={() => onTaskDelete(task.id)}
-                      className="text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 cursor-pointer"
+                      className="text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 cursor-pointer transition-colors"
+                      title="Delete task"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />

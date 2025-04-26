@@ -163,7 +163,7 @@ export default function PomodoroApp() {
 
     // Stop the timer
     setIsActive(false);
-  }, [currentTimer, currentTask, completedPomodoros, pomodoroTime, shortBreakTime, longBreakTime, currentSound]);
+  }, [currentSound, currentTimer, pomodoroTime, shortBreakTime, longBreakTime, currentTask, currentTaskId, completedPomodoros]);
 
   // Timer controls
   const startTimer = () => setIsActive(true);
@@ -318,7 +318,7 @@ export default function PomodoroApp() {
   };
 
   // Get timer label
-  const getTimerLabel = () => {
+  const getTimerLabel = useCallback(() => {
     switch (currentTimer) {
       case 'pomodoro':
         return 'Focus Time';
@@ -327,9 +327,9 @@ export default function PomodoroApp() {
       case 'longBreak':
         return 'Long Break';
       default:
-        return 'Pomodoro';
+        return 'Focus Time';
     }
-  };
+  }, [currentTimer]);
 
   // Get background color based on timer type and theme
   const getBackgroundColor = () => {
@@ -750,3 +750,4 @@ export default function PomodoroApp() {
     </>
   );
 }
+

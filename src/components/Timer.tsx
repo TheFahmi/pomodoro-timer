@@ -28,7 +28,7 @@ export default function Timer({ initialTime, onComplete, isActive, onTimeUpdate,
     } else {
       setTimeLeft(initialTime);
     }
-  }, []);
+  }, [initialTime, initialTimeOverride]);
 
   // Reset timer when initialTime changes or initialTimeOverride is provided
   // Only run this effect after initial client-side hydration

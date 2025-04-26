@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 type MotivationalQuoteProps = {
   isBreak: boolean;
@@ -70,7 +70,7 @@ export default function MotivationalQuote({ isBreak }: MotivationalQuoteProps) {
   const [fadeIn, setFadeIn] = useState(false);
 
   // Get a random quote or break message
-  const getRandomMessage = () => {
+  const getRandomMessage = useCallback(() => {
     if (isBreak) {
       const randomBreakMessage = BREAK_MESSAGES[Math.floor(Math.random() * BREAK_MESSAGES.length)];
       setQuote(randomBreakMessage);
@@ -80,7 +80,7 @@ export default function MotivationalQuote({ isBreak }: MotivationalQuoteProps) {
       setQuote(randomQuote.text);
       setAuthor(randomQuote.author);
     }
-  };
+  }, [isBreak]);
 
   // Update quote when isBreak changes
   useEffect(() => {
@@ -93,13 +93,13 @@ export default function MotivationalQuote({ isBreak }: MotivationalQuoteProps) {
     }, 500);
     
     return () => clearTimeout(timeout);
-  }, [isBreak]);
+  }, [getRandomMessage, isBreak]);
 
   // Initial quote on mount
   useEffect(() => {
     getRandomMessage();
     setFadeIn(true);
-  }, []);
+  }, [getRandomMessage]);
 
   // Get a new quote when clicked
   const handleClick = () => {
@@ -136,3 +136,4 @@ export default function MotivationalQuote({ isBreak }: MotivationalQuoteProps) {
     </div>
   );
 }
+

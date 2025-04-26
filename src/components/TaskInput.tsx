@@ -9,7 +9,7 @@ type TaskInputProps = {
 
 export default function TaskInput({ onTaskChange, currentTask }: TaskInputProps) {
   const [task, setTask] = useState(currentTask);
-  const [isTaskSet, setIsTaskSet] = useState(false);
+  const [, setIsTaskSet] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
 
   // Update local state when prop changes

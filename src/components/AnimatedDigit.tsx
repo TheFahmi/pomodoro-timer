@@ -15,7 +15,7 @@ export default function AnimatedDigit({ value }: AnimatedDigitProps) {
   // Initialize state on client-side only
   useEffect(() => {
     setPrevValue(value);
-  }, []);
+  }, [value]);
 
   useEffect(() => {
     // Skip animation on first render

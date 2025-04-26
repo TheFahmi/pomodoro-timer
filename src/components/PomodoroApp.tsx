@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Timer from './Timer';
 import Controls from './Controls';
 import Settings from './Settings';
@@ -10,12 +11,23 @@ import SoundOptions from './SoundOptions';
 import FocusMode from './FocusMode';
 import ThemeSelector, { Theme } from './ThemeSelector';
 import MotivationalQuote from './MotivationalQuote';
+import Statistics from './Statistics';
+import NotificationSettings from './NotificationSettings';
+import { GamificationData } from './Gamification';
+import Achievements, { Achievement } from './Achievements';
+import {
+  defaultGamificationData,
+  processCompletedPomodoro,
+  processCompletedTask,
+  calculateTotalFocusTime,
+  calculateCompletedTasks
+} from '../utils/gamificationUtils';
 
 // Timer types
-type TimerType = 'pomodoro' | 'shortBreak' | 'longBreak';
+export type TimerType = 'pomodoro' | 'shortBreak' | 'longBreak';
 
 // Session history type
-type SessionHistory = {
+export type SessionHistory = {
   type: TimerType;
   task: string;
   completed: boolean;
@@ -46,13 +58,17 @@ export default function PomodoroApp() {
     : '';
 
   const [completedPomodoros, setCompletedPomodoros] = useState(0);
-  const [, setSessionHistory] = useState<SessionHistory[]>([]);
+  const [sessionHistory, setSessionHistory] = useState<SessionHistory[]>([]);
   const [currentTimeFormatted, setCurrentTimeFormatted] = useState('');
   const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [statisticsOpen, setStatisticsOpen] = useState(false);
 
   // New feature states
   const [currentSound, setCurrentSound] = useState('notification');
   const [isFocusModeEnabled, setIsFocusModeEnabled] = useState(false);
+  const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
+  const [gamificationData, setGamificationData] = useState<GamificationData>(defaultGamificationData);
+  const [achievementsOpen, setAchievementsOpen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<Theme>({
     id: 'default',
     name: 'Default',
@@ -75,6 +91,38 @@ export default function PomodoroApp() {
         return pomodoroTime;
     }
   }, [currentTimer, pomodoroTime, shortBreakTime, longBreakTime]);
+
+  // Get timer label
+  const getTimerLabel = useCallback(() => {
+    switch (currentTimer) {
+      case 'pomodoro':
+        return 'Focus Time';
+      case 'shortBreak':
+        return 'Short Break';
+      case 'longBreak':
+        return 'Long Break';
+      default:
+        return 'Focus Time';
+    }
+  }, [currentTimer]);
+
+  // Show notification
+  const showNotification = useCallback((title: string, body: string) => {
+    if (typeof window === 'undefined' || !('Notification' in window) || !isNotificationEnabled) {
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      const notification = new Notification(title, {
+        body,
+        icon: '/favicon.ico',
+        silent: false // We're already playing a sound
+      });
+
+      // Auto close after 5 seconds
+      setTimeout(() => notification.close(), 5000);
+    }
+  }, [isNotificationEnabled]);
 
   // Handle timer completion
   const handleTimerComplete = useCallback(() => {
@@ -101,6 +149,16 @@ export default function PomodoroApp() {
     const audio = new Audio(soundPath);
     audio.play().catch(err => console.error('Failed to play sound:', err));
 
+    // Show notification based on timer type
+    if (isNotificationEnabled) {
+      const title = `${getTimerLabel()} Completed!`;
+      const body = currentTimer === 'pomodoro'
+        ? 'Time for a break!'
+        : 'Time to focus again!';
+
+      showNotification(title, body);
+    }
+
     // Add to history
     setSessionHistory(prev => [
       ...prev,
@@ -118,8 +176,8 @@ export default function PomodoroApp() {
 
       // Update completed pomodoros for the current task
       if (currentTaskId) {
-        setTasks(prevTasks =>
-          prevTasks.map(task =>
+        setTasks(prevTasks => {
+          const updatedTasks = prevTasks.map(task =>
             task.id === currentTaskId
               ? {
                   ...task,
@@ -128,9 +186,52 @@ export default function PomodoroApp() {
                   completed: task.completedPomodoros + 1 >= task.pomodoros ? true : task.completed
                 }
               : task
-          )
-        );
+          );
+
+          // Check if task was completed with this pomodoro
+          const currentTask = prevTasks.find(t => t.id === currentTaskId);
+          const updatedTask = updatedTasks.find(t => t.id === currentTaskId);
+
+          if (currentTask && updatedTask && !currentTask.completed && updatedTask.completed) {
+            // Task was just completed, update gamification data
+            setGamificationData(prevData => {
+              const updatedData = processCompletedTask(
+                prevData,
+                completedPomodoros + 1,
+                calculateCompletedTasks(updatedTasks) + 1,
+                calculateTotalFocusTime(sessionHistory, pomodoroTime)
+              );
+
+              // Save to localStorage
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('pomodoroGamification', JSON.stringify(updatedData));
+              }
+
+              return updatedData;
+            });
+          }
+
+          return updatedTasks;
+        });
       }
+
+      // Update gamification data for completed pomodoro
+      setGamificationData(prevData => {
+        const updatedData = processCompletedPomodoro(
+          prevData,
+          pomodoroTime,
+          completedPomodoros + 1,
+          calculateCompletedTasks(tasks),
+          calculateTotalFocusTime(sessionHistory, pomodoroTime) + pomodoroTime
+        );
+
+        // Save to localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('pomodoroGamification', JSON.stringify(updatedData));
+        }
+
+        return updatedData;
+      });
     }
 
     // Determine next timer type
@@ -163,7 +264,7 @@ export default function PomodoroApp() {
 
     // Stop the timer
     setIsActive(false);
-  }, [currentSound, currentTimer, pomodoroTime, shortBreakTime, longBreakTime, currentTask, currentTaskId, completedPomodoros]);
+  }, [currentSound, currentTimer, pomodoroTime, shortBreakTime, longBreakTime, currentTask, currentTaskId, completedPomodoros, isNotificationEnabled, showNotification, getTimerLabel]);
 
   // Timer controls
   const startTimer = () => setIsActive(true);
@@ -232,6 +333,9 @@ export default function PomodoroApp() {
   // Settings controls
   const toggleSettings = () => setSettingsOpen(!settingsOpen);
 
+  // Statistics controls
+  const toggleStatistics = () => setStatisticsOpen(!statisticsOpen);
+
   // Sound options handler
   const handleSoundChange = (sound: string) => {
     setCurrentSound(sound);
@@ -246,6 +350,25 @@ export default function PomodoroApp() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroFocusMode', isEnabled.toString());
     }
+  };
+
+  // Notification handler
+  const handleNotificationChange = (isEnabled: boolean) => {
+    setIsNotificationEnabled(isEnabled);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pomodoroNotifications', isEnabled.toString());
+    }
+  };
+
+  // Achievements handler
+  const toggleAchievements = () => {
+    setAchievementsOpen(!achievementsOpen);
+  };
+
+  // Handle achievement click
+  const handleAchievementClick = (achievement: Achievement) => {
+    // Could add special actions when clicking on achievements
+    console.log('Achievement clicked:', achievement.title);
   };
 
   // Theme handler
@@ -317,20 +440,6 @@ export default function PomodoroApp() {
     setCurrentTaskId(newTask.id);
   };
 
-  // Get timer label
-  const getTimerLabel = useCallback(() => {
-    switch (currentTimer) {
-      case 'pomodoro':
-        return 'Focus Time';
-      case 'shortBreak':
-        return 'Short Break';
-      case 'longBreak':
-        return 'Long Break';
-      default:
-        return 'Focus Time';
-    }
-  }, [currentTimer]);
-
   // Get background color based on timer type and theme
   const getBackgroundColor = () => {
     // If focus mode is enabled, always use a dark background
@@ -394,6 +503,13 @@ export default function PomodoroApp() {
     }
   }, [completedPomodoros]);
 
+  // Save session history to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionHistory.length > 0) {
+      localStorage.setItem('pomodoroSessionHistory', JSON.stringify(sessionHistory));
+    }
+  }, [sessionHistory]);
+
   // Client-side initialization
   useEffect(() => {
     // Mark that we're on the client side
@@ -456,6 +572,23 @@ export default function PomodoroApp() {
         setIsFocusModeEnabled(savedFocusMode === 'true');
       }
 
+      // Load notification preference
+      const savedNotification = localStorage.getItem('pomodoroNotifications');
+      if (savedNotification) {
+        setIsNotificationEnabled(savedNotification === 'true');
+      }
+
+      // Load gamification data
+      const savedGamification = localStorage.getItem('pomodoroGamification');
+      if (savedGamification) {
+        try {
+          const parsedData = JSON.parse(savedGamification);
+          setGamificationData(parsedData);
+        } catch (e) {
+          console.error('Failed to parse gamification data from localStorage:', e);
+        }
+      }
+
       // Load theme preference
       const savedTheme = localStorage.getItem('pomodoroTheme');
       if (savedTheme) {
@@ -463,6 +596,22 @@ export default function PomodoroApp() {
           setCurrentTheme(JSON.parse(savedTheme));
         } catch (e) {
           console.error('Failed to parse theme from localStorage:', e);
+        }
+      }
+
+      // Load session history
+      const savedSessionHistory = localStorage.getItem('pomodoroSessionHistory');
+      if (savedSessionHistory) {
+        try {
+          const parsedHistory = JSON.parse(savedSessionHistory);
+          // Convert string timestamps back to Date objects
+          const formattedHistory = parsedHistory.map((session: { type: TimerType; task: string; completed: boolean; timestamp: string }) => ({
+            ...session,
+            timestamp: new Date(session.timestamp)
+          }));
+          setSessionHistory(formattedHistory);
+        } catch (e) {
+          console.error('Failed to parse session history from localStorage:', e);
         }
       }
     }
@@ -497,11 +646,35 @@ export default function PomodoroApp() {
       else if (e.key === 'pomodoroFocusMode') {
         setIsFocusModeEnabled(e.newValue === 'true');
       }
+      else if (e.key === 'pomodoroNotifications') {
+        setIsNotificationEnabled(e.newValue === 'true');
+      }
+      else if (e.key === 'pomodoroGamification' && e.newValue) {
+        try {
+          const parsedData = JSON.parse(e.newValue);
+          setGamificationData(parsedData);
+        } catch (e) {
+          console.error('Failed to parse gamification data from storage event:', e);
+        }
+      }
       else if (e.key === 'pomodoroTheme' && e.newValue) {
         try {
           setCurrentTheme(JSON.parse(e.newValue));
         } catch (e) {
           console.error('Failed to parse theme from storage event:', e);
+        }
+      }
+      else if (e.key === 'pomodoroSessionHistory' && e.newValue) {
+        try {
+          const parsedHistory = JSON.parse(e.newValue);
+          // Convert string timestamps back to Date objects
+          const formattedHistory = parsedHistory.map((session: { type: TimerType; task: string; completed: boolean; timestamp: string }) => ({
+            ...session,
+            timestamp: new Date(session.timestamp)
+          }));
+          setSessionHistory(formattedHistory);
+        } catch (e) {
+          console.error('Failed to parse session history from storage event:', e);
         }
       }
     };
@@ -516,15 +689,39 @@ export default function PomodoroApp() {
         {isFocusModeEnabled ? (
           // Focus Mode - Only show the timer
           <div className="container mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-screen">
-            <div className="absolute top-4 right-4">
+            <motion.div 
+              className="absolute top-4 right-4"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
               <FocusMode
                 onFocusModeChange={handleFocusModeChange}
                 isFocusModeEnabled={isFocusModeEnabled}
               />
-            </div>
+            </motion.div>
 
-            <div className="bg-gray-900/80 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8 max-w-md">
-              <h2 className="text-2xl font-bold text-center mb-6 flex items-center justify-center text-white">
+            <motion.div 
+              className="bg-gray-900/80 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8 max-w-md"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ 
+                type: "spring",
+                stiffness: 260,
+                damping: 20
+              }}
+            >
+              <motion.h2 
+                className="text-2xl font-bold text-center mb-6 flex items-center justify-center text-white"
+                animate={{ 
+                  color: currentTimer === 'pomodoro' 
+                    ? '#f43f5e' 
+                    : currentTimer === 'shortBreak' 
+                      ? '#10b981' 
+                      : '#0ea5e9' 
+                }}
+                transition={{ duration: 1 }}
+              >
                 {currentTimer === 'pomodoro' ? (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -539,10 +736,15 @@ export default function PomodoroApp() {
                   </svg>
                 )}
                 {getTimerLabel()}
-              </h2>
+              </motion.h2>
 
               {currentTask && (
-                <div className="mb-4 text-center">
+                <motion.div 
+                  className="mb-4 text-center"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
                   <div className="inline-flex items-center bg-gray-800 px-4 py-2 rounded-full text-gray-300">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                       <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
@@ -550,7 +752,7 @@ export default function PomodoroApp() {
                     </svg>
                     <span className="font-medium">Current Task:</span> {currentTask}
                   </div>
-                </div>
+                </motion.div>
               )}
 
               <Timer
@@ -568,13 +770,25 @@ export default function PomodoroApp() {
                 onReset={resetTimer}
                 onSkip={skipTimer}
               />
-            </div>
+            </motion.div>
           </div>
         ) : (
           // Normal Mode - Show all components
           <div className="container mx-auto px-4 py-8">
-            <header className="text-center mb-8">
-              <h1 className="text-4xl font-bold mb-2">Pomodoro Timer</h1>
+            <motion.header 
+              className="text-center mb-8"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <motion.h1 
+                className="text-4xl font-bold mb-2"
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 10 }}
+              >
+                Pomodoro Timer
+              </motion.h1>
               <div className="flex justify-center space-x-4 mb-4">
                 <button
                   onClick={() => {
@@ -634,6 +848,10 @@ export default function PomodoroApp() {
                   onFocusModeChange={handleFocusModeChange}
                   isFocusModeEnabled={isFocusModeEnabled}
                 />
+                <NotificationSettings
+                  onNotificationChange={handleNotificationChange}
+                  isNotificationEnabled={isNotificationEnabled}
+                />
               </div>
 
               <div className="flex flex-wrap justify-center gap-3 mb-4">
@@ -648,6 +866,16 @@ export default function PomodoroApp() {
                 />
 
                 <button
+                  onClick={toggleStatistics}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 transition-colors cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Statistics
+                </button>
+
+                <button
                   onClick={toggleSettings}
                   className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 transition-colors cursor-pointer"
                 >
@@ -658,95 +886,160 @@ export default function PomodoroApp() {
                   Timer Settings
                 </button>
               </div>
-            </header>
+            </motion.header>
 
             <div className="max-w-2xl mx-auto">
-              <main className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8">
-              <h2 className="text-2xl font-bold text-center mb-6 flex items-center justify-center">
-                {currentTimer === 'pomodoro' ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                ) : currentTimer === 'shortBreak' ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                  </svg>
-                )}
-                {getTimerLabel()}
-              </h2>
-
-              <TaskInput onTaskChange={handleTaskInputChange} currentTask={currentTask} />
-
-              <Timer
-                initialTime={getCurrentTime()}
-                onComplete={handleTimerComplete}
-                isActive={isActive}
-                onTimeUpdate={handleTimeUpdate}
-                initialTimeOverride={isClient.current && timeLeft > 0 ? timeLeft : undefined}
-              />
-
-              <Controls
-                isActive={isActive}
-                onStart={startTimer}
-                onPause={pauseTimer}
-                onReset={resetTimer}
-                onSkip={skipTimer}
-              />
-
-              <div className="mt-6 text-center">
-                <div className="flex flex-col md:flex-row justify-center items-center gap-4">
-                  <div className="bg-gray-100 dark:bg-gray-700/50 px-4 py-2 rounded-full text-gray-600 dark:text-gray-300 flex items-center cursor-default">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+              <motion.main 
+                className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.5 }}
+              >
+                <h2 className="text-2xl font-bold text-center mb-6 flex items-center justify-center">
+                  {currentTimer === 'pomodoro' ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span className="font-medium">Completed Pomodoros:</span> {completedPomodoros}
-                  </div>
-
-                  {currentTask && (
-                    <div className="bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full text-indigo-700 dark:text-indigo-300 flex items-center cursor-default">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                        <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
-                      </svg>
-                      <span className="font-medium">Current Task:</span> {currentTask}
-                    </div>
+                  ) : currentTimer === 'shortBreak' ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
                   )}
+                  {getTimerLabel()}
+                </h2>
+
+                <TaskInput onTaskChange={handleTaskInputChange} currentTask={currentTask} />
+
+                <Timer
+                  initialTime={getCurrentTime()}
+                  onComplete={handleTimerComplete}
+                  isActive={isActive}
+                  onTimeUpdate={handleTimeUpdate}
+                  initialTimeOverride={isClient.current && timeLeft > 0 ? timeLeft : undefined}
+                />
+
+                <Controls
+                  isActive={isActive}
+                  onStart={startTimer}
+                  onPause={pauseTimer}
+                  onReset={resetTimer}
+                  onSkip={skipTimer}
+                />
+
+                <div className="mt-6 text-center">
+                  <div className="flex flex-col md:flex-row justify-center items-center gap-4">
+                    <div className="bg-gray-100 dark:bg-gray-700/50 px-4 py-2 rounded-full text-gray-600 dark:text-gray-300 flex items-center cursor-default">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-medium">Completed Pomodoros:</span> {completedPomodoros}
+                    </div>
+
+                    {currentTask && (
+                      <div className="bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full text-indigo-700 dark:text-indigo-300 flex items-center cursor-default">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                          <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                        </svg>
+                        <span className="font-medium">Current Task:</span> {currentTask}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              </main>
+              </motion.main>
 
               {/* Motivational quote - only show during breaks or when focus mode is off */}
-              {(currentTimer !== 'pomodoro' || !isFocusModeEnabled) && (
-                <MotivationalQuote isBreak={currentTimer !== 'pomodoro'} />
-              )}
+              <AnimatePresence>
+                {(currentTimer !== 'pomodoro' || !isFocusModeEnabled) && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <MotivationalQuote isBreak={currentTimer !== 'pomodoro'} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-              <TaskList
-                tasks={tasks}
-                currentTaskId={currentTaskId}
-                onTaskSelect={handleTaskSelect}
-                onTaskAdd={handleTaskAdd}
-                onTaskUpdate={handleTaskUpdate}
-                onTaskDelete={handleTaskDelete}
-              />
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.5 }}
+              >
+                <TaskList
+                  tasks={tasks}
+                  currentTaskId={currentTaskId}
+                  onTaskSelect={handleTaskSelect}
+                  onTaskAdd={handleTaskAdd}
+                  onTaskUpdate={handleTaskUpdate}
+                  onTaskDelete={handleTaskDelete}
+                />
+              </motion.div>
             </div>
           </div>
         )}
       </div>
 
-      <Settings
-        pomodoroTime={pomodoroTime}
-        shortBreakTime={shortBreakTime}
-        longBreakTime={longBreakTime}
-        onPomodoroTimeChange={setPomodoroTime}
-        onShortBreakTimeChange={setShortBreakTime}
-        onLongBreakTimeChange={setLongBreakTime}
-        isOpen={settingsOpen}
-        onClose={toggleSettings}
-      />
+      <AnimatePresence>
+        {settingsOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Settings
+              pomodoroTime={pomodoroTime}
+              shortBreakTime={shortBreakTime}
+              longBreakTime={longBreakTime}
+              onPomodoroTimeChange={setPomodoroTime}
+              onShortBreakTimeChange={setShortBreakTime}
+              onLongBreakTimeChange={setLongBreakTime}
+              isOpen={settingsOpen}
+              onClose={toggleSettings}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {statisticsOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Statistics
+              isOpen={statisticsOpen}
+              onClose={toggleStatistics}
+              sessionHistory={sessionHistory}
+              completedPomodoros={completedPomodoros}
+              pomodoroTime={pomodoroTime}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {achievementsOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Achievements
+              isOpen={achievementsOpen}
+              onClose={toggleAchievements}
+              achievements={gamificationData.achievements}
+              onAchievementClick={handleAchievementClick}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

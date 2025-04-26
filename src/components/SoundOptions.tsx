@@ -28,7 +28,7 @@ export default function SoundOptions({ onSoundChange, currentSound }: SoundOptio
   const handleSoundSelect = (soundId: string) => {
     setSelectedSound(soundId);
     onSoundChange(soundId);
-    
+
     // Play a preview of the sound
     const sound = AVAILABLE_SOUNDS.find(s => s.id === soundId);
     if (sound) {
@@ -36,7 +36,7 @@ export default function SoundOptions({ onSoundChange, currentSound }: SoundOptio
       audio.volume = 0.5; // Lower volume for preview
       audio.play().catch(err => console.error('Failed to play sound preview:', err));
     }
-    
+
     setIsOpen(false);
   };
 
@@ -65,7 +65,7 @@ export default function SoundOptions({ onSoundChange, currentSound }: SoundOptio
               <button
                 key={sound.id}
                 onClick={() => handleSoundSelect(sound.id)}
-                className={`block w-full text-left px-4 py-2 text-sm ${
+                className={`block w-full text-left px-4 py-2 text-sm cursor-pointer ${
                   selectedSound === sound.id
                     ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-200'
                     : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'

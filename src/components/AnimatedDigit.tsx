@@ -14,23 +14,27 @@ export default function AnimatedDigit({ value }: AnimatedDigitProps) {
 
   // Initialize state on client-side only
   useEffect(() => {
-    setPrevValue(value);
-  }, [value]);
-
-  useEffect(() => {
-    // Skip animation on first render
-    if (firstRender.current) {
+    if (prevValue === null) {
+      setPrevValue(value);
       firstRender.current = false;
       return;
     }
 
+    // Don't animate if it's the first render
+    if (firstRender.current) {
+      firstRender.current = false;
+      setPrevValue(value);
+      return;
+    }
+
+    // Only animate if the value has changed
     if (value !== prevValue) {
       setAnimate(true);
 
       const timer = setTimeout(() => {
         setPrevValue(value);
         setAnimate(false);
-      }, 300);
+      }, 500);
 
       return () => clearTimeout(timer);
     }
@@ -41,7 +45,7 @@ export default function AnimatedDigit({ value }: AnimatedDigitProps) {
     return (
       <div className="relative w-16 h-24 mx-1 overflow-hidden bg-gray-100 dark:bg-gray-800 rounded-lg shadow-inner">
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-5xl font-bold">{value}</span>
+          <span className="text-5xl font-bold text-gray-800 dark:text-gray-100">{value}</span>
         </div>
       </div>
     );
@@ -53,25 +57,21 @@ export default function AnimatedDigit({ value }: AnimatedDigitProps) {
       <div className="absolute inset-0 flex items-center justify-center">
         {/* Current digit that will animate out */}
         <div
-          className={`absolute transition-all duration-300 ${
+          className={`absolute ${
             animate
-              ? 'opacity-0 transform scale-150'
+              ? 'digit-animate-out'
               : 'opacity-100 transform scale-100'
           }`}
         >
-          <span className="text-5xl font-bold">{prevValue}</span>
+          <span className="text-5xl font-bold text-gray-800 dark:text-gray-100">{prevValue}</span>
         </div>
 
         {/* New digit that will animate in */}
         {animate && (
           <div
-            className="absolute transition-all duration-300 opacity-0 transform scale-50 animate-in"
-            style={{
-              animation: 'fadeIn 300ms forwards',
-              animationDelay: '150ms',
-            }}
+            className="absolute opacity-0 transform scale-50 digit-animate-in"
           >
-            <span className="text-5xl font-bold">{value}</span>
+            <span className="text-5xl font-bold text-gray-800 dark:text-gray-100">{value}</span>
           </div>
         )}
       </div>

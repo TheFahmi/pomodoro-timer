@@ -22,10 +22,10 @@ export default function FocusMode({ onFocusModeChange, isFocusModeEnabled }: Foc
   };
 
   return (
-    <div className="flex items-center justify-center mb-4">
+    <div className="flex items-center justify-center">
       <button
         onClick={toggleFocusMode}
-        className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors cursor-pointer ${
+        className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors cursor-pointer min-w-[180px] justify-center ${
           isEnabled
             ? 'bg-indigo-600 text-white hover:bg-indigo-700'
             : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'

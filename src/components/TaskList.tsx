@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import TagManager, { getTagColor } from './TagManager';
 
 export type Task = {
   id: string;
@@ -9,6 +10,12 @@ export type Task = {
   pomodoros: number; // Estimated number of pomodoros
   completedPomodoros: number; // Completed pomodoros
   updatedAt: number; // Timestamp of last update
+  tags: string[]; // Array of tags for categorizing tasks
+  timeBlock?: { // Optional time block information
+    startTime?: string;
+    endTime?: string;
+    date?: string;
+  };
 };
 
 type TaskListProps = {
@@ -18,6 +25,8 @@ type TaskListProps = {
   onTaskAdd: (task: Task) => void;
   onTaskUpdate: (task: Task) => void;
   onTaskDelete: (taskId: string) => void;
+  onTagCreate?: (tag: string) => void; // Added prop for creating new tags
+  availableTags?: string[]; // Available tags for suggestions
 };
 
 export default function TaskList({
@@ -27,11 +36,18 @@ export default function TaskList({
   onTaskAdd,
   onTaskUpdate,
   onTaskDelete,
+  onTagCreate,
+  availableTags = [],
 }: TaskListProps) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskPomodoros, setNewTaskPomodoros] = useState(1);
   const [isAddingTask, setIsAddingTask] = useState(false);
-
+  const [newTaskTags, setNewTaskTags] = useState<string[]>([]);
+  const [showTimeBlockOptions, setShowTimeBlockOptions] = useState(false);
+  const [timeBlockStart, setTimeBlockStart] = useState('');
+  const [timeBlockEnd, setTimeBlockEnd] = useState('');
+  const [timeBlockDate, setTimeBlockDate] = useState(new Date().toISOString().split('T')[0]); // Today's date
+  
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (newTaskTitle.trim()) {
@@ -41,11 +57,26 @@ export default function TaskList({
         completed: false,
         pomodoros: newTaskPomodoros,
         completedPomodoros: 0,
-        updatedAt: 0
+        updatedAt: Date.now(),
+        tags: newTaskTags,
       };
+      
+      // Add time block information if provided
+      if (showTimeBlockOptions && timeBlockStart && timeBlockEnd) {
+        newTask.timeBlock = {
+          startTime: timeBlockStart,
+          endTime: timeBlockEnd,
+          date: timeBlockDate
+        };
+      }
+      
       onTaskAdd(newTask);
       setNewTaskTitle('');
       setNewTaskPomodoros(1);
+      setNewTaskTags([]);
+      setShowTimeBlockOptions(false);
+      setTimeBlockStart('');
+      setTimeBlockEnd('');
       setIsAddingTask(false);
     }
   };
@@ -54,8 +85,16 @@ export default function TaskList({
     onTaskUpdate({
       ...task,
       completed: !task.completed,
+      updatedAt: Date.now(),
     });
   };
+
+  // Filter tasks by tags
+  const [filterTag, setFilterTag] = useState<string | null>(null);
+  
+  const filteredTasks = filterTag 
+    ? tasks.filter(task => task.tags.includes(filterTag))
+    : tasks;
 
   return (
     <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-8">
@@ -72,14 +111,46 @@ export default function TaskList({
         </p>
       </div>
 
+      {/* Tag filter buttons */}
+      {availableTags.length > 0 && (
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm text-gray-500 dark:text-gray-400">Filter by:</span>
+            <button
+              onClick={() => setFilterTag(null)}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                filterTag === null 
+                  ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
+                  : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              All
+            </button>
+            {availableTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => setFilterTag(tag)}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  filterTag === tag 
+                    ? getTagColor(tag) + ' ring-2 ring-offset-2 ring-indigo-300 dark:ring-indigo-700'
+                    : getTagColor(tag) + ' hover:opacity-80'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mb-4">
-        {tasks.length === 0 ? (
+        {filteredTasks.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-            No tasks yet. Add a task to get started.
+            {tasks.length === 0 ? "No tasks yet. Add a task to get started." : "No tasks match the selected filter."}
           </p>
         ) : (
           <ul className="space-y-2">
-            {tasks.map((task) => (
+            {filteredTasks.map((task) => (
               <li
                 key={task.id}
                 className={`p-3 rounded-lg transition-colors ${
@@ -137,6 +208,30 @@ export default function TaskList({
                     </button>
                   </div>
                 </div>
+                
+                {/* Display tags */}
+                {task.tags && task.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {task.tags.map((tag) => (
+                      <span
+                        key={`${task.id}-${tag}`}
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${getTagColor(tag)}`}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Display time block if it exists */}
+                {task.timeBlock && (
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {new Date(task.timeBlock?.date ?? new Date()).toLocaleDateString()} {task.timeBlock?.startTime} - {task.timeBlock?.endTime}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -175,6 +270,77 @@ export default function TaskList({
             />
           </div>
 
+          <div className="mb-3">
+            <label htmlFor="taskTags" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Tags
+            </label>
+            <TagManager
+              availableTags={availableTags}
+              selectedTags={newTaskTags}
+              onTagsChange={setNewTaskTags}
+              onTagCreate={onTagCreate}
+            />
+          </div>
+
+          {/* Time Block Feature */}
+          <div className="mb-3">
+            <div className="flex items-center mb-2">
+              <input
+                type="checkbox"
+                id="enableTimeBlock"
+                checked={showTimeBlockOptions}
+                onChange={() => setShowTimeBlockOptions(!showTimeBlockOptions)}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+              <label htmlFor="enableTimeBlock" className="ml-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Add Time Block
+              </label>
+            </div>
+            
+            {showTimeBlockOptions && (
+              <div className="bg-gray-100 dark:bg-gray-600 p-3 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label htmlFor="timeBlockDate" className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      id="timeBlockDate"
+                      value={timeBlockDate}
+                      onChange={(e) => setTimeBlockDate(e.target.value)}
+                      className="w-full p-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="timeBlockStart" className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      Start Time
+                    </label>
+                    <input
+                      type="time"
+                      id="timeBlockStart"
+                      value={timeBlockStart}
+                      onChange={(e) => setTimeBlockStart(e.target.value)}
+                      className="w-full p-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="timeBlockEnd" className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                      End Time
+                    </label>
+                    <input
+                      type="time"
+                      id="timeBlockEnd"
+                      value={timeBlockEnd}
+                      onChange={(e) => setTimeBlockEnd(e.target.value)}
+                      className="w-full p-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end space-x-2">
             <button
               type="button"
@@ -205,3 +371,4 @@ export default function TaskList({
     </div>
   );
 }
+

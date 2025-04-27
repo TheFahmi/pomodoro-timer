@@ -2,7 +2,7 @@
 
 A web-based productivity tool that helps you implement the Pomodoro technique for focusing and taking breaks at regular intervals. This application is developed with Next.js and can be installed as a Progressive Web App (PWA) for offline use.
 
-![Pomodoro Timer](public/screenshots/Screenshot1.png)
+![Pomodoro Timer](public/screenshots/screenshot1.png)
 
 ## Key Features
 

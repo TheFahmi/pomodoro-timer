@@ -78,7 +78,10 @@ export default function PomodoroTechniqueSelect({
     }
   };
 
-  const handleCustomTechniqueChange = (field: keyof PomodoroTechnique, value: any) => {
+  const handleCustomTechniqueChange = (
+    field: keyof PomodoroTechnique,
+    value: PomodoroTechnique[keyof PomodoroTechnique]
+  ) => {
     const updatedTechnique = { ...customTechnique, [field]: value };
     setCustomTechnique(updatedTechnique);
     

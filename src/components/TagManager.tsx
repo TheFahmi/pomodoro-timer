@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 // Function to generate a tag color based on the tag name
 export const getTagColor = (tag: string): string => {

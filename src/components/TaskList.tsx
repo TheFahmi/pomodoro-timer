@@ -41,6 +41,7 @@ export default function TaskList({
         completed: false,
         pomodoros: newTaskPomodoros,
         completedPomodoros: 0,
+        updatedAt: 0
       };
       onTaskAdd(newTask);
       setNewTaskTitle('');

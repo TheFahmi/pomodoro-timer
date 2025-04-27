@@ -59,6 +59,9 @@ type ToolsMenuProps = {
   // Settings
   onStatisticsClick?: () => void;
   onTimerSettingsClick?: () => void;
+
+  // Productivity Insights
+  onProductivityInsightsClick: () => void;
 };
 
 export default function ToolsMenu({
@@ -104,7 +107,10 @@ export default function ToolsMenu({
   
   // Settings
   onStatisticsClick = () => {},
-  onTimerSettingsClick = () => {}
+  onTimerSettingsClick = () => {},
+
+  // Productivity Insights
+  onProductivityInsightsClick
 }: ToolsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -428,6 +434,19 @@ export default function ToolsMenu({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                       </svg>
                       Timer Settings
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onProductivityInsightsClick();
+                        setIsOpen(false); // Close menu after clicking
+                      }}
+                      className="flex items-center w-full px-4 py-3 text-sm font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+                      </svg>
+                      Productivity Insights
                     </button>
                   </div>
                 )}

@@ -80,6 +80,24 @@ To use the application as a PWA:
 
 MIT License
 
+## New Features
+
+### Zen Mode
+- 🧘 Guided breathing exercises during breaks
+- 🌊 Ambient nature sounds to help maintain focus
+- 🎯 Visualization techniques for enhanced concentration
+- 🔄 Simple meditation prompts between sessions
+
+### Document Title Timer
+- ⏱️ Timer displayed in the browser tab title
+- 🔔 Visual indication of current session type in the title
+- 🔄 Continues tracking time even when the tab is inactive
+
+### Session Notes
+- 📝 Add notes and reflections to each completed session
+- 🔍 Review past performance and track productivity patterns
+- 💡 Capture ideas and thoughts during your workflow
+
 ## Contribution
 
 Contributions, issues, and pull requests are welcome. Please create an issue first for discussion before making major changes.

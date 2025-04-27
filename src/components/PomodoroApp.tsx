@@ -22,6 +22,7 @@ import Achievements, { Achievement } from './Achievements';
 import SessionNotes from './SessionNotes';
 import { TabSynchronization } from '../utils/tabSynchronization';
 import { FocusModeOptions } from './FocusMode';
+import ProductivityInsights from './ProductivityInsights';
 import {
   defaultGamificationData,
   processCompletedPomodoro,
@@ -57,7 +58,7 @@ const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-export default function PomodoroApp() {
+const PomodoroApp: React.FC = () => {
   // Timer settings (in seconds)
   const [pomodoroTime, setPomodoroTime] = useState(25 * 60);
   const [shortBreakTime, setShortBreakTime] = useState(5 * 60);
@@ -74,6 +75,9 @@ export default function PomodoroApp() {
   
   // Add Zen Mode state
   const [isZenModeActive, setIsZenModeActive] = useState(false);
+
+  // Add Productivity Insights state
+  const [isProductivityInsightsOpen, setIsProductivityInsightsOpen] = useState<boolean>(false);
 
   // Initialize with default values for SSR
   const [isActive, setIsActive] = useState(false);
@@ -141,6 +145,7 @@ export default function PomodoroApp() {
     background: '#ffffff', // White
     text: '#1f2937', // Gray-800
   });
+
 
   // Set up tab synchronization listeners
   useEffect(() => {
@@ -752,6 +757,11 @@ export default function PomodoroApp() {
     }
   };
 
+  // Toggle ProductivityInsights dashboard
+  const toggleProductivityInsights = useCallback(() => {
+    setIsProductivityInsightsOpen(!isProductivityInsightsOpen);
+  }, [isProductivityInsightsOpen]);
+
   // Load data from localStorage on client side
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1141,6 +1151,7 @@ export default function PomodoroApp() {
     }
   };
 
+
   return (
     <>
       <div className={`min-h-screen ${currentTheme.bgClass} transition-colors duration-500`}>
@@ -1290,8 +1301,8 @@ export default function PomodoroApp() {
                   totalTime={getCurrentTime()}
 
                   // Custom Theme
-                  customThemeColors={undefined}
-                  onCustomThemeChange={() => {}}
+                  customThemeColors={customTheme}
+                  onCustomThemeChange={handleCustomThemeChange}
 
                   // Calendar Integration
                   onCalendarEventSelect={() => {}}
@@ -1313,6 +1324,7 @@ export default function PomodoroApp() {
                   // Settings
                   onStatisticsClick={toggleStatistics}
                   onTimerSettingsClick={toggleSettings}
+                  onProductivityInsightsClick={toggleProductivityInsights}
                 />
 
                 <div className="flex flex-wrap justify-center">
@@ -1571,6 +1583,27 @@ export default function PomodoroApp() {
                 )}
               </motion.div>
             </div>
+
+            {/* ProductivityInsights Dashboard */}
+            <AnimatePresence>
+              {isProductivityInsightsOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="mb-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 overflow-hidden"
+                >
+                  <ProductivityInsights 
+                    sessionHistory={sessionHistory}
+                    tasks={tasks}
+                    totalPomodorosCompleted={completedPomodoros}
+                    isOpen={isProductivityInsightsOpen}
+                    onClose={toggleProductivityInsights}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       </div>
@@ -1669,9 +1702,42 @@ export default function PomodoroApp() {
         isVisible={timerTransitionVisible}
         onComplete={handleTimerTransitionComplete}
       />
+
+      {/* Add ProductivityInsights component */}
+      <AnimatePresence>
+        {isProductivityInsightsOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsProductivityInsightsOpen(false)}
+          >
+            <motion.div 
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto"
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ProductivityInsights
+                sessionHistory={sessionHistory}
+                tasks={tasks}
+                totalPomodorosCompleted={completedPomodoros}
+                isOpen={isProductivityInsightsOpen}
+                onClose={() => setIsProductivityInsightsOpen(false)}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
+
+export default PomodoroApp;
+
+
 
 
 

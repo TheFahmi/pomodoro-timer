@@ -418,7 +418,7 @@ const PomodoroApp: React.FC = () => {
 
     // Stop the timer
     setIsActive(false);
-  }, [currentSound, currentTimer, pomodoroTime, shortBreakTime, longBreakTime, currentTask, currentTaskId, completedPomodoros, isNotificationEnabled, showNotification, getTimerLabel]);
+  }, [currentSound, isNotificationEnabled, currentTimer, pomodoroTime, shortBreakTime, longBreakTime, getTimerLabel, showNotification, currentTask, currentTaskId, completedPomodoros, sessionHistory, tasks]);
 
   // Handle closing the time complete animation
   const handleTimeCompleteClose = () => {

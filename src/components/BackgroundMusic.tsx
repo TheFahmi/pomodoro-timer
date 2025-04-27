@@ -41,7 +41,7 @@ export default function BackgroundMusic({
         }
       };
     }
-  }, []);
+  }, [volume]);
 
   // Update audio source when music changes
   useEffect(() => {

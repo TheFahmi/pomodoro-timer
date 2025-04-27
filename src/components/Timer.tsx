@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TimerTheme } from './TimerThemeSelector';
 
@@ -48,8 +48,14 @@ export default function Timer({
 }: TimerProps) {
   // Use initialTimeOverride if provided, otherwise use initialTime
   const [timeLeft, setTimeLeft] = useState(initialTimeOverride ?? initialTime);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevTimeRef = useRef<string>(formatTime(timeLeft));
+  
+  // References for accurate timing that works when tab is inactive
+  const startTimeRef = useRef<number | null>(null);
+  const endTimeRef = useRef<number | null>(null);
+  const requestRef = useRef<number | null>(null);
+  const lastUpdateTimeRef = useRef<number>(Date.now());
+  const isTabActiveRef = useRef<boolean>(true);
 
   // Menggunakan tema default jika tidak ada tema yang diberikan
   const defaultTheme: TimerTheme = {
@@ -79,37 +85,121 @@ export default function Timer({
     }
   }, [initialTimeOverride, onTimeUpdate]);
 
-  // Handle timer tick
+  // Animation frame based timer (for when tab is active)
+  const updateTimer = useCallback(() => {
+    if (!isActive || startTimeRef.current === null) {
+      requestRef.current = null;
+      return;
+    }
+
+    const now = Date.now();
+    const elapsedSeconds = Math.floor((now - startTimeRef.current) / 1000);
+    const newTimeLeft = Math.max(0, initialTime - elapsedSeconds);
+    
+    // Only update state if the time has changed by at least 1 second
+    if (Math.floor(newTimeLeft) !== Math.floor(timeLeft)) {
+      setTimeLeft(newTimeLeft);
+      onTimeUpdate(newTimeLeft);
+      
+      if (newTimeLeft <= 0) {
+        onComplete();
+        startTimeRef.current = null;
+        requestRef.current = null;
+        return;
+      }
+    }
+    
+    // Ensure the timer keeps running
+    if (isTabActiveRef.current) {
+      requestRef.current = requestAnimationFrame(updateTimer);
+    }
+  }, [isActive, initialTime, timeLeft, onComplete, onTimeUpdate]);
+
+  // Set up page visibility detection
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const wasTabActive = isTabActiveRef.current;
+      isTabActiveRef.current = document.visibilityState === 'visible';
+      
+      // When tab becomes active again, update the timer immediately based on elapsed time
+      if (isTabActiveRef.current && !wasTabActive && startTimeRef.current !== null && isActive) {
+        const now = Date.now();
+        const elapsedSeconds = Math.floor((now - startTimeRef.current) / 1000);
+        const newTimeLeft = Math.max(0, initialTime - elapsedSeconds);
+        
+        // Reset the start time based on current timeLeft to prevent drift
+        startTimeRef.current = now - ((initialTime - newTimeLeft) * 1000);
+        
+        if (newTimeLeft <= 0) {
+          setTimeLeft(0);
+          onComplete();
+          startTimeRef.current = null;
+        } else {
+          setTimeLeft(newTimeLeft);
+          onTimeUpdate(newTimeLeft);
+          
+          // Restart the animation frame loop when tab becomes active
+          if (requestRef.current === null) {
+            requestRef.current = requestAnimationFrame(updateTimer);
+          }
+        }
+        
+        lastUpdateTimeRef.current = now;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isActive, initialTime, onComplete, onTimeUpdate, updateTimer]);
+
+  // Handle timer start/stop
   useEffect(() => {
     if (isActive) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          const newTime = prev - 1;
-          
-          // Update parent with new time
-          // onTimeUpdate(newTime, formatTime(newTime)); // Memicu update state selama render
-          
-          if (newTime <= 0) {
-            // Timer complete
-            clearInterval(intervalRef.current as NodeJS.Timeout);
-            onComplete();
-            return 0;
-          }
-          return newTime;
-        });
-      }, 1000);
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+      // Set the start time when the timer becomes active
+      const now = Date.now();
+      
+      // If we already had a startTime, adjust it based on the current timeLeft
+      if (startTimeRef.current === null) {
+        startTimeRef.current = now - ((initialTime - timeLeft) * 1000);
+      } else {
+        // If we already have a start time, update it to avoid drift
+        startTimeRef.current = now - ((initialTime - timeLeft) * 1000);
+      }
+      
+      lastUpdateTimeRef.current = now;
+      endTimeRef.current = null;
+      
+      // Start the animation frame loop for active tab updates
+      if (requestRef.current === null && isTabActiveRef.current) {
+        requestRef.current = requestAnimationFrame(updateTimer);
+      }
+    } else {
+      // When pausing, record the current time left
+      if (startTimeRef.current !== null) {
+        endTimeRef.current = Date.now();
+        // Clear start time when paused to ensure proper restart
+        startTimeRef.current = null;
+      }
+      
+      // Cancel any pending animation frame
+      if (requestRef.current !== null) {
+        cancelAnimationFrame(requestRef.current);
+        requestRef.current = null;
+      }
     }
     
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      if (requestRef.current !== null) {
+        cancelAnimationFrame(requestRef.current);
+        requestRef.current = null;
       }
     };
-  }, [isActive, onComplete, onTimeUpdate]);
+  }, [isActive, initialTime, timeLeft, updateTimer]);
 
-  // Separate effect to notify parent of time changes
+  // Notify parent of time changes
   useEffect(() => {
     // Only notify parent when time changes and not during initial render
     if (timeLeft !== initialTimeOverride && timeLeft !== initialTime) {

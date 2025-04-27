@@ -13,6 +13,23 @@ interface ExcelExportProps {
   longBreakTime: number;
 }
 
+interface ExportData {
+  tasks?: {
+    Title: string;
+    Completed: string;
+    'Total Pomodoros': number;
+    'Completed Pomodoros': number;
+    'Created At': string;
+    'Updated At': string;
+  }[];
+  sessions?: {
+    Type: string;
+    Completed: string;
+    'Duration (minutes)': number;
+    Date: string;
+  }[];
+}
+
 export default function ExcelExport({
   tasks,
   sessionHistory,
@@ -40,7 +57,7 @@ export default function ExcelExport({
       // Apply date filter
       if (dateRange !== 'all') {
         const now = new Date();
-        let cutoffDate = new Date();
+        const cutoffDate = new Date();
         
         if (dateRange === 'today') {
           cutoffDate.setHours(0, 0, 0, 0);
@@ -55,12 +72,12 @@ export default function ExcelExport({
         );
         
         filteredSessions = filteredSessions.filter(session => 
-          new Date(session.date) >= cutoffDate
+          session.date ? new Date(session.date) >= cutoffDate : false
         );
       }
       
       // Prepare data for export
-      const data: any = {};
+      const data: ExportData = {};
       
       if (exportOption === 'all' || exportOption === 'tasks') {
         data.tasks = filteredTasks.map(task => ({
@@ -68,7 +85,7 @@ export default function ExcelExport({
           Completed: task.completed ? 'Yes' : 'No',
           'Total Pomodoros': task.pomodoros,
           'Completed Pomodoros': task.completedPomodoros,
-          'Created At': new Date(task.createdAt).toLocaleString(),
+          'Created At': new Date(task.updatedAt).toLocaleString(),
           'Updated At': new Date(task.updatedAt).toLocaleString()
         }));
       }
@@ -82,7 +99,7 @@ export default function ExcelExport({
             : session.type === 'shortBreak' 
               ? shortBreakTime / 60 
               : longBreakTime / 60,
-          Date: new Date(session.date).toLocaleString()
+          Date: session.date ? new Date(session.date).toLocaleString() : 'N/A'
         }));
       }
       
@@ -124,7 +141,7 @@ export default function ExcelExport({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 overflow-hidden"
+            className="absolute right-0 mt-2 w-51 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 overflow-hidden"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -291,3 +308,7 @@ export default function ExcelExport({
     </div>
   );
 }
+
+
+
+

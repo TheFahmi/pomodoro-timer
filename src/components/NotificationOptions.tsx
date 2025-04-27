@@ -84,12 +84,12 @@ export default function NotificationOptions({ isEnabled, onToggle }: Notificatio
       {permissionState === 'granted' && isEnabled && (
         <div className="mt-4">
           <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-            You'll receive notifications when:
+            You&apos;ll receive notifications when:
           </div>
           <ul className="text-xs text-gray-600 dark:text-gray-400 list-disc pl-5 space-y-1">
             <li>A timer completes</li>
-            <li>It's time to take a break</li>
-            <li>It's time to get back to work</li>
+            <li>It&apos;s time to take a break</li>
+            <li>It&apos;s time to get back to work</li>
           </ul>
         </div>
       )}

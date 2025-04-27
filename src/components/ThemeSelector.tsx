@@ -60,7 +60,6 @@ const AVAILABLE_THEMES: Theme[] = [
 ];
 
 export default function ThemeSelector({ onThemeChange, currentThemeId }: ThemeSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState(
     AVAILABLE_THEMES.find(theme => theme.id === currentThemeId) || AVAILABLE_THEMES[0]
   );
@@ -79,61 +78,39 @@ export default function ThemeSelector({ onThemeChange, currentThemeId }: ThemeSe
       setSelectedTheme(theme);
       onThemeChange(theme);
     }
-    setIsOpen(false);
   };
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 transition-colors cursor-pointer"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" />
-        </svg>
-        Theme: {selectedTheme.name}
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-10 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 focus:outline-none">
-          <div className="py-1" role="menu" aria-orientation="vertical">
-            <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-              Select Theme
+    <div className="w-full">
+      <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">App Theme</div>
+      
+      <div className="grid grid-cols-1 gap-1">
+        {AVAILABLE_THEMES.map((theme) => (
+          <button
+            key={theme.id}
+            onClick={() => handleThemeSelect(theme.id)}
+            className={`flex items-center justify-start px-2 py-1 text-xs rounded ${
+              selectedTheme.id === theme.id
+                ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-200'
+                : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            <div className="flex items-center">
+              {selectedTheme.id === theme.id && (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 text-indigo-600 dark:text-indigo-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              )}
+              <div className={selectedTheme.id === theme.id ? 'flex items-center' : 'flex items-center ml-4'}>
+                <div className={`w-2 h-2 rounded-full ${theme.primaryColor} mr-1`}></div>
+                <div className={`w-2 h-2 rounded-full ${theme.secondaryColor} mr-1`}></div>
+                <div className={`w-2 h-2 rounded-full ${theme.accentColor} mr-1`}></div>
+                <span className="text-xs">{theme.name}</span>
+              </div>
             </div>
-            {AVAILABLE_THEMES.map((theme) => (
-              <button
-                key={theme.id}
-                onClick={() => handleThemeSelect(theme.id)}
-                className={`block w-full text-left px-4 py-2 text-sm cursor-pointer ${
-                  selectedTheme.id === theme.id
-                    ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-200'
-                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-                role="menuitem"
-              >
-                <div className="flex items-center">
-                  {selectedTheme.id === theme.id && (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                  <div className={selectedTheme.id === theme.id ? 'ml-2' : 'ml-6'}>
-                    <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full ${theme.primaryColor} mr-1`}></div>
-                      <div className={`w-3 h-3 rounded-full ${theme.secondaryColor} mr-1`}></div>
-                      <div className={`w-3 h-3 rounded-full ${theme.accentColor} mr-2`}></div>
-                      {theme.name}
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

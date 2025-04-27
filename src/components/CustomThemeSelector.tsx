@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface CustomThemeProps {
   onThemeChange: (colors: CustomThemeColors) => void;
   currentTheme: CustomThemeColors;
+  inToolsMenu?: boolean;
 }
 
 export interface CustomThemeColors {
@@ -80,7 +81,7 @@ const themePresets = [
   },
 ];
 
-export default function CustomThemeSelector({ onThemeChange, currentTheme }: CustomThemeProps) {
+export default function CustomThemeSelector({ onThemeChange, currentTheme, inToolsMenu = false }: CustomThemeProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [customTheme, setCustomTheme] = useState<CustomThemeColors>(currentTheme);
   const [activeTab, setActiveTab] = useState<'presets' | 'custom'>('presets');
@@ -107,7 +108,227 @@ export default function CustomThemeSelector({ onThemeChange, currentTheme }: Cus
     onThemeChange(customTheme);
     setIsOpen(false);
   };
+
+  // Special case for Tools Menu - display inline instead of dropdown
+  if (inToolsMenu) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center mb-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2">
+          <div className="flex items-center">
+            <div className="flex gap-1 mr-2">
+              <div className="w-5 h-5 rounded-full border-2 border-white dark:border-gray-700 shadow-sm" style={{ backgroundColor: currentTheme.primary }} />
+              <div className="w-5 h-5 rounded-full border-2 border-white dark:border-gray-700 shadow-sm" style={{ backgroundColor: currentTheme.secondary }} />
+              <div className="w-5 h-5 rounded-full border-2 border-white dark:border-gray-700 shadow-sm" style={{ backgroundColor: currentTheme.accent }} />
+            </div>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Current Theme</span>
+          </div>
+          
+          <div className="flex rounded-md bg-gray-200 dark:bg-gray-700 p-0.5">
+            <button
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                activeTab === 'presets'
+                  ? 'bg-white dark:bg-gray-600 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600/50'
+              }`}
+              onClick={() => setActiveTab('presets')}
+            >
+              Presets
+            </button>
+            <button
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                activeTab === 'custom'
+                  ? 'bg-white dark:bg-gray-600 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600/50'
+              }`}
+              onClick={() => setActiveTab('custom')}
+            >
+              Custom
+            </button>
+          </div>
+        </div>
+        
+        {activeTab === 'presets' ? (
+          <div className="grid grid-cols-2 gap-3">
+            {themePresets.map((preset) => (
+              <motion.button
+                key={preset.name}
+                className={`p-2.5 rounded-lg border ${
+                  JSON.stringify(preset.colors) === JSON.stringify(currentTheme)
+                    ? 'border-indigo-400 dark:border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-400 dark:ring-indigo-500'
+                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                } focus:outline-none cursor-pointer transition-all duration-200`}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => applyTheme(preset.colors)}
+              >
+                <div className="flex space-x-1 mb-2 justify-center">
+                  <div className="w-5 h-5 rounded-full border border-white dark:border-gray-700 shadow-sm" style={{ backgroundColor: preset.colors.primary }} />
+                  <div className="w-5 h-5 rounded-full border border-white dark:border-gray-700 shadow-sm" style={{ backgroundColor: preset.colors.secondary }} />
+                  <div className="w-5 h-5 rounded-full border border-white dark:border-gray-700 shadow-sm" style={{ backgroundColor: preset.colors.accent }} />
+                </div>
+                <div className="text-xs font-medium text-center text-gray-900 dark:text-white">
+                  {preset.name}
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3 bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Primary Color
+              </label>
+              <div className="flex">
+                <div 
+                  className="w-9 h-9 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                  style={{ backgroundColor: customTheme.primary }}
+                >
+                  <input
+                    type="color"
+                    value={customTheme.primary}
+                    onChange={(e) => handleColorChange('primary', e.target.value)}
+                    className="opacity-0 absolute cursor-pointer"
+                  />
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mix-blend-difference" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={customTheme.primary}
+                  onChange={(e) => handleColorChange('primary', e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Secondary Color
+              </label>
+              <div className="flex">
+                <div 
+                  className="w-9 h-9 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                  style={{ backgroundColor: customTheme.secondary }}
+                >
+                  <input
+                    type="color"
+                    value={customTheme.secondary}
+                    onChange={(e) => handleColorChange('secondary', e.target.value)}
+                    className="opacity-0 absolute cursor-pointer"
+                  />
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mix-blend-difference" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={customTheme.secondary}
+                  onChange={(e) => handleColorChange('secondary', e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Accent Color
+              </label>
+              <div className="flex">
+                <div 
+                  className="w-9 h-9 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                  style={{ backgroundColor: customTheme.accent }}
+                >
+                  <input
+                    type="color"
+                    value={customTheme.accent}
+                    onChange={(e) => handleColorChange('accent', e.target.value)}
+                    className="opacity-0 absolute cursor-pointer"
+                  />
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mix-blend-difference" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={customTheme.accent}
+                  onChange={(e) => handleColorChange('accent', e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Background Color
+              </label>
+              <div className="flex">
+                <div 
+                  className="w-9 h-9 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                  style={{ backgroundColor: customTheme.background }}
+                >
+                  <input
+                    type="color"
+                    value={customTheme.background}
+                    onChange={(e) => handleColorChange('background', e.target.value)}
+                    className="opacity-0 absolute cursor-pointer"
+                  />
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-black mix-blend-difference" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={customTheme.background}
+                  onChange={(e) => handleColorChange('background', e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Text Color
+              </label>
+              <div className="flex">
+                <div 
+                  className="w-9 h-9 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                  style={{ backgroundColor: customTheme.text }}
+                >
+                  <input
+                    type="color"
+                    value={customTheme.text}
+                    onChange={(e) => handleColorChange('text', e.target.value)}
+                    className="opacity-0 absolute cursor-pointer"
+                  />
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mix-blend-difference" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={customTheme.text}
+                  onChange={(e) => handleColorChange('text', e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                />
+              </div>
+            </div>
+            
+            <div className="pt-2">
+              <button
+                onClick={() => onThemeChange(customTheme)}
+                className="w-full px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-md text-sm font-medium transition-colors cursor-pointer shadow-sm"
+              >
+                Apply Theme
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
   
+  // Regular dropdown version for non-ToolsMenu usage
   return (
     <div className="relative">
       <motion.button
@@ -158,18 +379,22 @@ export default function CustomThemeSelector({ onThemeChange, currentTheme }: Cus
             <div className="p-4">
               {activeTab === 'presets' ? (
                 <div className="grid grid-cols-2 gap-2">
-                  {themePresets.map((preset, index) => (
+                  {themePresets.map((preset) => (
                     <motion.button
                       key={preset.name}
-                      className="p-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none cursor-pointer"
+                      className={`p-2 rounded-md border ${
+                        JSON.stringify(preset.colors) === JSON.stringify(currentTheme)
+                          ? 'border-indigo-400 dark:border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-400 dark:ring-indigo-500'
+                          : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      } focus:outline-none cursor-pointer`}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => applyTheme(preset.colors)}
                     >
                       <div className="flex space-x-1 mb-2">
-                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: preset.colors.primary }} />
-                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: preset.colors.secondary }} />
-                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: preset.colors.accent }} />
+                        <div className="w-4 h-4 rounded-full border border-white dark:border-gray-600 shadow-sm" style={{ backgroundColor: preset.colors.primary }} />
+                        <div className="w-4 h-4 rounded-full border border-white dark:border-gray-600 shadow-sm" style={{ backgroundColor: preset.colors.secondary }} />
+                        <div className="w-4 h-4 rounded-full border border-white dark:border-gray-600 shadow-sm" style={{ backgroundColor: preset.colors.accent }} />
                       </div>
                       <div className="text-xs font-medium text-gray-900 dark:text-white">
                         {preset.name}
@@ -184,12 +409,17 @@ export default function CustomThemeSelector({ onThemeChange, currentTheme }: Cus
                       Primary Color
                     </label>
                     <div className="flex">
-                      <input
-                        type="color"
-                        value={customTheme.primary}
-                        onChange={(e) => handleColorChange('primary', e.target.value)}
-                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 cursor-pointer"
-                      />
+                      <div 
+                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                        style={{ backgroundColor: customTheme.primary }}
+                      >
+                        <input
+                          type="color"
+                          value={customTheme.primary}
+                          onChange={(e) => handleColorChange('primary', e.target.value)}
+                          className="opacity-0 absolute cursor-pointer"
+                        />
+                      </div>
                       <input
                         type="text"
                         value={customTheme.primary}
@@ -204,12 +434,17 @@ export default function CustomThemeSelector({ onThemeChange, currentTheme }: Cus
                       Secondary Color
                     </label>
                     <div className="flex">
-                      <input
-                        type="color"
-                        value={customTheme.secondary}
-                        onChange={(e) => handleColorChange('secondary', e.target.value)}
-                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 cursor-pointer"
-                      />
+                      <div 
+                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                        style={{ backgroundColor: customTheme.secondary }}
+                      >
+                        <input
+                          type="color"
+                          value={customTheme.secondary}
+                          onChange={(e) => handleColorChange('secondary', e.target.value)}
+                          className="opacity-0 absolute cursor-pointer"
+                        />
+                      </div>
                       <input
                         type="text"
                         value={customTheme.secondary}
@@ -224,12 +459,17 @@ export default function CustomThemeSelector({ onThemeChange, currentTheme }: Cus
                       Accent Color
                     </label>
                     <div className="flex">
-                      <input
-                        type="color"
-                        value={customTheme.accent}
-                        onChange={(e) => handleColorChange('accent', e.target.value)}
-                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 cursor-pointer"
-                      />
+                      <div 
+                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                        style={{ backgroundColor: customTheme.accent }}
+                      >
+                        <input
+                          type="color"
+                          value={customTheme.accent}
+                          onChange={(e) => handleColorChange('accent', e.target.value)}
+                          className="opacity-0 absolute cursor-pointer"
+                        />
+                      </div>
                       <input
                         type="text"
                         value={customTheme.accent}
@@ -244,12 +484,17 @@ export default function CustomThemeSelector({ onThemeChange, currentTheme }: Cus
                       Background Color
                     </label>
                     <div className="flex">
-                      <input
-                        type="color"
-                        value={customTheme.background}
-                        onChange={(e) => handleColorChange('background', e.target.value)}
-                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 cursor-pointer"
-                      />
+                      <div 
+                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                        style={{ backgroundColor: customTheme.background }}
+                      >
+                        <input
+                          type="color"
+                          value={customTheme.background}
+                          onChange={(e) => handleColorChange('background', e.target.value)}
+                          className="opacity-0 absolute cursor-pointer"
+                        />
+                      </div>
                       <input
                         type="text"
                         value={customTheme.background}
@@ -264,12 +509,17 @@ export default function CustomThemeSelector({ onThemeChange, currentTheme }: Cus
                       Text Color
                     </label>
                     <div className="flex">
-                      <input
-                        type="color"
-                        value={customTheme.text}
-                        onChange={(e) => handleColorChange('text', e.target.value)}
-                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 cursor-pointer"
-                      />
+                      <div 
+                        className="w-8 h-8 rounded-l-md border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer"
+                        style={{ backgroundColor: customTheme.text }}
+                      >
+                        <input
+                          type="color"
+                          value={customTheme.text}
+                          onChange={(e) => handleColorChange('text', e.target.value)}
+                          className="opacity-0 absolute cursor-pointer"
+                        />
+                      </div>
                       <input
                         type="text"
                         value={customTheme.text}
@@ -282,7 +532,7 @@ export default function CustomThemeSelector({ onThemeChange, currentTheme }: Cus
                   <div className="pt-2">
                     <button
                       onClick={applyCustomTheme}
-                      className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium transition-colors cursor-pointer"
+                      className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium transition-colors cursor-pointer shadow-sm"
                     >
                       Apply Theme
                     </button>

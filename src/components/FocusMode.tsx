@@ -145,7 +145,7 @@ export default function FocusMode({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-10 p-4 border border-gray-200 dark:border-gray-700"
+            className="absolute right-0 mt-2 w-51 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-10 p-4 border border-gray-200 dark:border-gray-700"
           >
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Focus Mode Options</h3>
 

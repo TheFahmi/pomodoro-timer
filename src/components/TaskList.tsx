@@ -8,6 +8,7 @@ export type Task = {
   completed: boolean;
   pomodoros: number; // Estimated number of pomodoros
   completedPomodoros: number; // Completed pomodoros
+  updatedAt: number; // Timestamp of last update
 };
 
 type TaskListProps = {

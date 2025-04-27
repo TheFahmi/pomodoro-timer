@@ -13,7 +13,6 @@ export default function AnimatedClock({ time }: AnimatedClockProps) {
   // Ensure we have exactly 5 characters (mm:ss format)
   const minute1 = digits[0] || '0';
   const minute2 = digits[1] || '0';
-  const colon = ':';
   const second1 = digits[3] || '0';
   const second2 = digits[4] || '0';
 

@@ -62,26 +62,6 @@ const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-// Function to apply custom theme colors as CSS variables
-const applyCustomThemeVariables = (colors: CustomThemeColors) => {
-  const root = document.documentElement;
-  root.style.setProperty('--primary', colors.primary);
-  root.style.setProperty('--secondary', colors.secondary);
-  root.style.setProperty('--accent', colors.accent);
-  root.style.setProperty('--custom-background', colors.background);
-  root.style.setProperty('--custom-text', colors.text);
-};
-
-// Function to remove custom theme variables
-const removeCustomThemeVariables = () => {
-  const root = document.documentElement;
-  root.style.removeProperty('--primary');
-  root.style.removeProperty('--secondary');
-  root.style.removeProperty('--accent');
-  root.style.removeProperty('--custom-background');
-  root.style.removeProperty('--custom-text');
-};
-
 const PomodoroApp: React.FC = () => {
   // Timer settings (in seconds)
   const [pomodoroTime, setPomodoroTime] = useState(25 * 60);
@@ -172,7 +152,6 @@ const PomodoroApp: React.FC = () => {
     background: '#ffffff', // White
     text: '#1f2937', // Gray-800
   });
-  const [isCustomThemeActive, setIsCustomThemeActive] = useState(false); // <-- New state
 
   // State and imports for Habit Tracker
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -733,14 +712,11 @@ const PomodoroApp: React.FC = () => {
     }
   };
 
-  // Theme handler (Predefined Themes)
+  // Theme handler
   const handleThemeChange = (theme: Theme) => {
     setCurrentTheme(theme);
-    setIsCustomThemeActive(false); // <-- Mark predefined theme as active
-    removeCustomThemeVariables(); // <-- Remove custom variables
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroTheme', JSON.stringify(theme));
-      localStorage.setItem('pomodoroIsCustomThemeActive', 'false'); // <-- Save state
     }
   };
 
@@ -781,11 +757,8 @@ const PomodoroApp: React.FC = () => {
   // Handle custom theme
   const handleCustomThemeChange = (colors: CustomThemeColors) => {
     setCustomTheme(colors);
-    setIsCustomThemeActive(true); // <-- Mark custom theme as active
-    applyCustomThemeVariables(colors); // <-- Apply colors as CSS variables
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroCustomTheme', JSON.stringify(colors));
-      localStorage.setItem('pomodoroIsCustomThemeActive', 'true'); // <-- Save state
     }
   };
 
@@ -816,45 +789,6 @@ const PomodoroApp: React.FC = () => {
     // Mark that we're on client side
     isClient.current = true;
 
-    // --- Load Theme Settings FIRST ---
-    const savedIsCustomThemeActive = localStorage.getItem('pomodoroIsCustomThemeActive');
-    const savedCustomTheme = localStorage.getItem('pomodoroCustomTheme');
-    const savedTheme = localStorage.getItem('pomodoroTheme');
-
-    let themeApplied = false;
-    if (savedIsCustomThemeActive === 'true' && savedCustomTheme) {
-      try {
-        const parsedTheme = JSON.parse(savedCustomTheme);
-        setCustomTheme(parsedTheme);
-        setIsCustomThemeActive(true);
-        applyCustomThemeVariables(parsedTheme); // <-- Apply loaded custom theme
-        themeApplied = true;
-      } catch (e) {
-        console.error('Failed to parse or apply custom theme from storage:', e);
-        removeCustomThemeVariables(); // Fallback: remove potentially broken variables
-        setIsCustomThemeActive(false); // Fallback: disable custom theme
-      }
-    }
-
-    // Load predefined theme if custom wasn't active or failed to load
-    if (!themeApplied && savedTheme) {
-       try {
-         setCurrentTheme(JSON.parse(savedTheme));
-         setIsCustomThemeActive(false); // Ensure custom is marked inactive
-         removeCustomThemeVariables(); // Ensure custom variables are removed
-       } catch (e) {
-         console.error('Failed to parse predefined theme from storage:', e);
-         // Keep default predefined theme
-         setIsCustomThemeActive(false);
-         removeCustomThemeVariables();
-       }
-    } else if (!themeApplied) {
-        // No saved theme at all, ensure custom variables are removed
-        setIsCustomThemeActive(false);
-        removeCustomThemeVariables();
-    }
-    // --- End Theme Settings Loading ---
-
     // Load saved data
     const savedPomodoroTime = localStorage.getItem('pomodoroPomodoroTime');
     const savedShortBreakTime = localStorage.getItem('pomodoroShortBreakTime');
@@ -870,12 +804,6 @@ const PomodoroApp: React.FC = () => {
     const savedDND = localStorage.getItem('pomodoroDND');
     const savedDNDOptions = localStorage.getItem('pomodoroDNDOptions');
     const savedCurrentTask = localStorage.getItem('pomodoroCurrentTask');
-
-    // Load saved habits
-    const savedHabits = loadHabits();
-    if (savedHabits.length > 0) {
-      setHabits(savedHabits);
-    }
 
     // Apply saved settings
     if (savedPomodoroTime) setPomodoroTime(parseInt(savedPomodoroTime));
@@ -1262,9 +1190,9 @@ const PomodoroApp: React.FC = () => {
     };
   }, [isActive, timeLeft, handleTimerComplete, tabSync]); // Dependencies
 
-  // Habit tracking handlers
-  const handleHabitAdd = (habit: Omit<Habit, 'id' | 'createdAt' | 'completedDates' | 'currentStreak' | 'longestStreak'>) => {
-    const updatedHabits = addHabitToStorage(habits, habit);
+  // Handlers for HabitTracker
+  const handleHabitAdd = (habitData: Omit<Habit, 'id' | 'createdAt' | 'completedDates' | 'currentStreak' | 'longestStreak'>) => {
+    const updatedHabits = addHabitToStorage(habits, habitData);
     setHabits(updatedHabits);
   };
 
@@ -1278,16 +1206,17 @@ const PomodoroApp: React.FC = () => {
     setHabits(updatedHabits);
   };
 
+  // Load habits from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedHabits = loadHabits();
+      setHabits(savedHabits);
+    }
+  }, []);
+
   return (
     <>
-      {/* Apply background/text based on active theme type */}
-      <div
-        className={`min-h-screen ${!isCustomThemeActive ? currentTheme.bgClass : ''} transition-colors duration-500`}
-        style={isCustomThemeActive ? {
-          backgroundColor: 'var(--custom-background)',
-          color: 'var(--custom-text)'
-        } : {}}
-      >
+      <div className={`min-h-screen ${currentTheme.bgClass} transition-colors duration-500`}>
         {isFocusModeEnabled ? (
           // Focus Mode - Only show the timer
           <div className="container mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-screen">
@@ -1442,14 +1371,12 @@ const PomodoroApp: React.FC = () => {
                   // Task Import/Export
                   onImportTasks={handleImportTasks}
 
-                  // Data Export
+                  // Excel Export
                   tasks={tasks}
                   sessionHistory={sessionHistory}
                   pomodoroTime={pomodoroTime}
                   shortBreakTime={shortBreakTime}
                   longBreakTime={longBreakTime}
-                  completedPomodoros={completedPomodoros}
-                  gamificationData={gamificationData}
 
                   // Notes
                   onNotesToggle={toggleNotes}
@@ -1576,14 +1503,7 @@ const PomodoroApp: React.FC = () => {
 
             <div className="max-w-2xl mx-auto">
               <motion.main
-                // Use CSS variables for background/text if custom theme is active
-                className={`rounded-xl shadow-lg p-8 mb-8 ${!isCustomThemeActive ? 'bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm' : ''}`}
-                style={isCustomThemeActive ? {
-                  backgroundColor: 'var(--custom-background)', // Or a slightly modified version if needed
-                  color: 'var(--custom-text)',
-                  // Add backdrop-filter manually if needed for custom themes
-                  // backdropFilter: 'blur(4px)', // Example
-                } : {}}
+                className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.5 }}
@@ -1948,15 +1868,24 @@ const PomodoroApp: React.FC = () => {
 
               <div className="flex-grow overflow-auto">
                 <div className="p-4">
-
                   {/* Task List */}
                   {tasks.length === 0 ? (
-                    <div className="text-center pb-12">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      <p className="text-gray-500 dark:text-gray-400 text-lg">No tasks yet</p>
-                      <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">Add a task to get started with your pomodoro sessions</p>
+                    <div>
+                      <TaskList
+                        tasks={tasks}
+                        currentTaskId={currentTaskId}
+                        onTaskSelect={handleTaskSelect}
+                        onTaskAdd={handleTaskAdd}
+                        onTaskUpdate={handleTaskUpdate}
+                        onTaskDelete={handleTaskDelete}
+                        onTasksReorder={handleTasksReorder}
+                        closeTaskListModal={() => setIsTaskListModalOpen(false)}
+                        showInputFormByDefault={false}
+                        habits={habits}
+                        onHabitAdd={handleHabitAdd}
+                        onHabitComplete={handleHabitComplete}
+                        onHabitDelete={handleHabitDelete}
+                      />
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -1981,6 +1910,7 @@ const PomodoroApp: React.FC = () => {
                           onTaskAdd={handleTaskAdd}
                           onTaskUpdate={handleTaskUpdate}
                           onTaskDelete={handleTaskDelete}
+                          onTasksReorder={handleTasksReorder}
                           closeTaskListModal={() => setIsTaskListModalOpen(false)}
                           showInputFormByDefault={false}
                           habits={habits}

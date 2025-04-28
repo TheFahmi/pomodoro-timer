@@ -79,7 +79,18 @@ export default function TaskList({
 }: TaskListProps) {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskPomodoros, setNewTaskPomodoros] = useState(1);
-  const [isAddingTask, setIsAddingTask] = useState(showInputFormByDefault);
+  // Check if there's a flag in localStorage to show the add task form
+  const [isAddingTask, setIsAddingTask] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const showAddTaskForm = localStorage.getItem('pomodoroShowAddTaskForm');
+      if (showAddTaskForm === 'true') {
+        // Clear the flag
+        localStorage.removeItem('pomodoroShowAddTaskForm');
+        return true;
+      }
+    }
+    return showInputFormByDefault;
+  });
   const [newTaskTags, setNewTaskTags] = useState<string[]>([]);
   const [showTimeBlockOptions, setShowTimeBlockOptions] = useState(false);
   const [timeBlockStart, setTimeBlockStart] = useState('');
@@ -725,7 +736,7 @@ export default function TaskList({
   };
 
   return (
-    <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-8">
+    <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-8 task-list-component">
       {/* Tab Navigation */}
       <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
         <button
@@ -899,12 +910,17 @@ export default function TaskList({
       ) : (
         <button
           onClick={() => setIsAddingTask(true)}
-          className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md flex items-center justify-center cursor-pointer shadow-md hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5"
+          className="w-full py-4 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg flex items-center justify-center cursor-pointer shadow-md hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5 relative overflow-hidden group"
+          data-action="add-task"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
-          Add New Task
+          <span className="absolute inset-0 w-full h-full transition duration-300 ease-out transform -translate-x-full bg-indigo-800 group-hover:translate-x-0"></span>
+          <span className="absolute inset-0 w-full h-full transition duration-300 ease-out transform translate-x-full bg-indigo-700 group-hover:translate-x-0 delay-75"></span>
+          <span className="relative flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+            </svg>
+            <span className="text-base">Add New Task</span>
+          </span>
         </button>
       )}
       <div className="my-6">
@@ -974,15 +990,16 @@ export default function TaskList({
           </div>
         </div>
 
-        <p className="text-gray-600 dark:text-gray-400 text-sm">
-          {viewMode === 'list'
-            ? "Plan your tasks and track your progress. Use the drag handle (≡) to reorder tasks or click the position number to change task order."
-            : "Plan your tasks and track your progress in grid view. Click the position number to change task order."}
-        </p>
+
         <div className="mt-2 bg-blue-50 dark:bg-blue-900/30 p-2 rounded-md text-xs text-blue-700 dark:text-blue-300 flex items-start">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">
+            {viewMode === 'list'
+              ? "Plan your tasks and track your progress. Use the drag handle (≡) to reorder tasks or click the position number to change task order."
+              : "Plan your tasks and track your progress in grid view. Click the position number to change task order."}
+          </p>
         </div>
       </div>
 
@@ -1104,9 +1121,34 @@ export default function TaskList({
 
       <div className="mb-4">
         {filteredTasks.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-            {tasks.length === 0 ? "No tasks yet. Add a task to get started." : "No tasks match the selected filter."}
-          </p>
+          <div className="text-center py-8 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-700">
+            {tasks.length === 0 ? (
+              <div>
+                <div className="flex justify-center mb-4">
+                  <div className="relative">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-indigo-200 dark:text-indigo-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-indigo-500 absolute -bottom-2 -right-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="text-gray-700 dark:text-gray-300 text-lg font-medium">No tasks yet</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Add a task to get started with your pomodoro sessions</p>
+              </div>
+            ) : (
+              <div>
+                <div className="flex justify-center mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-amber-300 dark:text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                </div>
+                <p className="text-gray-700 dark:text-gray-300 text-lg font-medium">No tasks match the selected filter</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Try changing your filter settings</p>
+              </div>
+            )}
+          </div>
         ) : viewMode === 'list' ? (
           // List View with drag and drop
           <DragDropContext

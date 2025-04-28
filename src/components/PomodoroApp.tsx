@@ -36,6 +36,9 @@ import TimerThemeSelector, { TimerTheme, timerThemes } from './TimerThemeSelecto
 import DoNotDisturbMode, { DoNotDisturbOptions } from './DoNotDisturbMode';
 import CustomThemeSelector, { CustomThemeColors } from './CustomThemeSelector';
 import ProgressTimeline from './ProgressTimeline';
+import HealthReminder from '../../components/HealthReminder';
+import { Habit } from './HabitTracker';
+import { loadHabits, addHabit as addHabitToStorage, completeHabit as completeHabitInStorage, deleteHabit as deleteHabitFromStorage } from '../utils/habitStorage';
 
 // Timer types
 export type TimerType = 'pomodoro' | 'shortBreak' | 'longBreak';
@@ -59,12 +62,32 @@ const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
+// Function to apply custom theme colors as CSS variables
+const applyCustomThemeVariables = (colors: CustomThemeColors) => {
+  const root = document.documentElement;
+  root.style.setProperty('--primary', colors.primary);
+  root.style.setProperty('--secondary', colors.secondary);
+  root.style.setProperty('--accent', colors.accent);
+  root.style.setProperty('--custom-background', colors.background);
+  root.style.setProperty('--custom-text', colors.text);
+};
+
+// Function to remove custom theme variables
+const removeCustomThemeVariables = () => {
+  const root = document.documentElement;
+  root.style.removeProperty('--primary');
+  root.style.removeProperty('--secondary');
+  root.style.removeProperty('--accent');
+  root.style.removeProperty('--custom-background');
+  root.style.removeProperty('--custom-text');
+};
+
 const PomodoroApp: React.FC = () => {
   // Timer settings (in seconds)
   const [pomodoroTime, setPomodoroTime] = useState(25 * 60);
   const [shortBreakTime, setShortBreakTime] = useState(5 * 60);
   const [longBreakTime, setLongBreakTime] = useState(15 * 60);
-  
+
   // Add ref to track timer start time
   const startTimeRef = useRef<number | null>(null);
 
@@ -73,7 +96,7 @@ const PomodoroApp: React.FC = () => {
 
   // Current timer state - initialize with default values for SSR
   const [currentTimer, setCurrentTimer] = useState<TimerType>('pomodoro');
-  
+
   // Add Zen Mode state
   const [isZenModeActive, setIsZenModeActive] = useState(false);
 
@@ -124,7 +147,7 @@ const PomodoroApp: React.FC = () => {
   // Tab synchronization
   const [tabSync] = useState<TabSynchronization>(() => new TabSynchronization());
   const [isSequentialTaskView, setIsSequentialTaskView] = useState(false);
-  
+
   // Task list modal state
   const [isTaskListModalOpen, setIsTaskListModalOpen] = useState(false);
 
@@ -149,7 +172,10 @@ const PomodoroApp: React.FC = () => {
     background: '#ffffff', // White
     text: '#1f2937', // Gray-800
   });
+  const [isCustomThemeActive, setIsCustomThemeActive] = useState(false); // <-- New state
 
+  // State and imports for Habit Tracker
+  const [habits, setHabits] = useState<Habit[]>([]);
 
   // Set up tab synchronization listeners
   useEffect(() => {
@@ -488,7 +514,7 @@ const PomodoroApp: React.FC = () => {
   const startTimer = () => {
     // Record the start time when timer starts
     startTimeRef.current = new Date().getTime();
-    
+
     setIsActive(true);
     if (typeof window !== 'undefined' && tabSync) {
       tabSync.sendMessage('TIMER_START');
@@ -504,26 +530,26 @@ const PomodoroApp: React.FC = () => {
   const resetTimer = () => {
     // Stop the timer first
     setIsActive(false);
-    
+
     // Clear the start time reference
     startTimeRef.current = null;
-    
+
     // Reset the timer to the current timer type's full duration
     const currentTime = getCurrentTime();
     setTimeLeft(currentTime);
-    
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroTimeLeft', currentTime.toString());
 
       // Notify other tabs
       if (tabSync) {
-        tabSync.sendMessage('TIMER_RESET', { 
+        tabSync.sendMessage('TIMER_RESET', {
           timer: currentTimer,
-          time: currentTime 
+          time: currentTime
         });
       }
     }
-    
+
     // Add to history as incomplete
     setSessionHistory(prev => [
       ...prev,
@@ -707,11 +733,14 @@ const PomodoroApp: React.FC = () => {
     }
   };
 
-  // Theme handler
+  // Theme handler (Predefined Themes)
   const handleThemeChange = (theme: Theme) => {
     setCurrentTheme(theme);
+    setIsCustomThemeActive(false); // <-- Mark predefined theme as active
+    removeCustomThemeVariables(); // <-- Remove custom variables
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroTheme', JSON.stringify(theme));
+      localStorage.setItem('pomodoroIsCustomThemeActive', 'false'); // <-- Save state
     }
   };
 
@@ -749,24 +778,27 @@ const PomodoroApp: React.FC = () => {
     }
   };
 
-  // Handle custom theme 
+  // Handle custom theme
   const handleCustomThemeChange = (colors: CustomThemeColors) => {
     setCustomTheme(colors);
+    setIsCustomThemeActive(true); // <-- Mark custom theme as active
+    applyCustomThemeVariables(colors); // <-- Apply colors as CSS variables
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroCustomTheme', JSON.stringify(colors));
+      localStorage.setItem('pomodoroIsCustomThemeActive', 'true'); // <-- Save state
     }
   };
 
   // Handle Zen Mode toggle
   const handleZenModeToggle = (isEnabled: boolean) => {
     setIsZenModeActive(isEnabled);
-    
+
     // If enabling Zen Mode, we might want to pause the timer to let user concentrate
     // on the breathing or visualization first
     if (isEnabled && isActive) {
       pauseTimer();
     }
-    
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroZenMode', isEnabled.toString());
     }
@@ -784,6 +816,45 @@ const PomodoroApp: React.FC = () => {
     // Mark that we're on client side
     isClient.current = true;
 
+    // --- Load Theme Settings FIRST ---
+    const savedIsCustomThemeActive = localStorage.getItem('pomodoroIsCustomThemeActive');
+    const savedCustomTheme = localStorage.getItem('pomodoroCustomTheme');
+    const savedTheme = localStorage.getItem('pomodoroTheme');
+
+    let themeApplied = false;
+    if (savedIsCustomThemeActive === 'true' && savedCustomTheme) {
+      try {
+        const parsedTheme = JSON.parse(savedCustomTheme);
+        setCustomTheme(parsedTheme);
+        setIsCustomThemeActive(true);
+        applyCustomThemeVariables(parsedTheme); // <-- Apply loaded custom theme
+        themeApplied = true;
+      } catch (e) {
+        console.error('Failed to parse or apply custom theme from storage:', e);
+        removeCustomThemeVariables(); // Fallback: remove potentially broken variables
+        setIsCustomThemeActive(false); // Fallback: disable custom theme
+      }
+    }
+
+    // Load predefined theme if custom wasn't active or failed to load
+    if (!themeApplied && savedTheme) {
+       try {
+         setCurrentTheme(JSON.parse(savedTheme));
+         setIsCustomThemeActive(false); // Ensure custom is marked inactive
+         removeCustomThemeVariables(); // Ensure custom variables are removed
+       } catch (e) {
+         console.error('Failed to parse predefined theme from storage:', e);
+         // Keep default predefined theme
+         setIsCustomThemeActive(false);
+         removeCustomThemeVariables();
+       }
+    } else if (!themeApplied) {
+        // No saved theme at all, ensure custom variables are removed
+        setIsCustomThemeActive(false);
+        removeCustomThemeVariables();
+    }
+    // --- End Theme Settings Loading ---
+
     // Load saved data
     const savedPomodoroTime = localStorage.getItem('pomodoroPomodoroTime');
     const savedShortBreakTime = localStorage.getItem('pomodoroShortBreakTime');
@@ -800,6 +871,12 @@ const PomodoroApp: React.FC = () => {
     const savedDNDOptions = localStorage.getItem('pomodoroDNDOptions');
     const savedCurrentTask = localStorage.getItem('pomodoroCurrentTask');
 
+    // Load saved habits
+    const savedHabits = loadHabits();
+    if (savedHabits.length > 0) {
+      setHabits(savedHabits);
+    }
+
     // Apply saved settings
     if (savedPomodoroTime) setPomodoroTime(parseInt(savedPomodoroTime));
     if (savedShortBreakTime) setShortBreakTime(parseInt(savedShortBreakTime));
@@ -811,7 +888,7 @@ const PomodoroApp: React.FC = () => {
     if (savedCompletedPomodoros) setCompletedPomodoros(parseInt(savedCompletedPomodoros));
     if (savedSound) setCurrentSound(savedSound);
     if (savedCurrentTask) setCurrentTask(savedCurrentTask);
-    
+
     // Load Zen Mode state
     const savedZenMode = localStorage.getItem('pomodoroZenMode');
     if (savedZenMode === 'true') {
@@ -974,10 +1051,10 @@ const PomodoroApp: React.FC = () => {
 
       // Reset time left to the full duration of the new timer type
       setTimeLeft(newTime);
-      
+
       // Reset the active state to stop the timer
       setIsActive(false);
-      
+
       // Clear the start time reference
       startTimeRef.current = null;
 
@@ -1002,7 +1079,7 @@ const PomodoroApp: React.FC = () => {
   useEffect(() => {
     const updateTitle = () => {
       const formattedTime = formatTime(timeLeft);
-      
+
       if (currentTimer === 'pomodoro') {
         document.title = `(${formattedTime}) 🍅 Focus - Pomodoro Timer`;
       } else if (currentTimer === 'shortBreak') {
@@ -1020,7 +1097,7 @@ const PomodoroApp: React.FC = () => {
       timerId = setInterval(updateTitle, 1000);
     } else {
       // Ensure title is updated once if timer becomes inactive
-      updateTitle(); 
+      updateTitle();
     }
 
     return () => {
@@ -1075,7 +1152,7 @@ const PomodoroApp: React.FC = () => {
   // Handle task input change
   const handleTaskInputChange = (task: string) => {
     setCurrentTask(task);
-    
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroCurrentTask', task);
     }
@@ -1083,20 +1160,33 @@ const PomodoroApp: React.FC = () => {
 
   // Task management functions
   const handleTaskSelect = (taskId: string) => {
+    // Tetapkan task yang dipilih sebagai current task
     setCurrentTaskId(taskId);
+
+    // Temukan judul task yang dipilih dari daftar task
     const selectedTask = tasks.find(task => task.id === taskId);
     if (selectedTask) {
       setCurrentTask(selectedTask.title);
+
+      // Simpan ke localStorage untuk konsistensi
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('pomodoroCurrentTaskId', taskId);
+        localStorage.setItem('pomodoroCurrentTask', selectedTask.title);
+      }
+
+      // Log untuk debugging
+      console.log(`Selected task: ${selectedTask.title} (ID: ${taskId})`);
+    } else {
+      console.warn(`Task with ID ${taskId} not found in tasks list`);
     }
-    
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('pomodoroCurrentTaskId', taskId);
-    }
+
+    // Opsional: Tutup modal task list jika terbuka
+    setIsTaskListModalOpen(false);
   };
 
   const handleTaskAdd = (task: Task) => {
     setTasks([...tasks, task]);
-    
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroTasks', JSON.stringify([...tasks, task]));
     }
@@ -1106,9 +1196,9 @@ const PomodoroApp: React.FC = () => {
     const updatedTasks = tasks.map(task =>
       task.id === updatedTask.id ? updatedTask : task
     );
-    
+
     setTasks(updatedTasks);
-    
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroTasks', JSON.stringify(updatedTasks));
     }
@@ -1116,15 +1206,15 @@ const PomodoroApp: React.FC = () => {
 
   const handleTaskDelete = (taskId: string) => {
     const remainingTasks = tasks.filter(task => task.id !== taskId);
-    
+
     setTasks(remainingTasks);
-    
+
     // If deleting current task, clear currentTaskId
     if (currentTaskId === taskId) {
       setCurrentTaskId(null);
       setCurrentTask('');
     }
-    
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('pomodoroTasks', JSON.stringify(remainingTasks));
       if (currentTaskId === taskId) {
@@ -1172,9 +1262,32 @@ const PomodoroApp: React.FC = () => {
     };
   }, [isActive, timeLeft, handleTimerComplete, tabSync]); // Dependencies
 
+  // Habit tracking handlers
+  const handleHabitAdd = (habit: Omit<Habit, 'id' | 'createdAt' | 'completedDates' | 'currentStreak' | 'longestStreak'>) => {
+    const updatedHabits = addHabitToStorage(habits, habit);
+    setHabits(updatedHabits);
+  };
+
+  const handleHabitComplete = (habitId: string, date: string) => {
+    const updatedHabits = completeHabitInStorage(habits, habitId, date);
+    setHabits(updatedHabits);
+  };
+
+  const handleHabitDelete = (habitId: string) => {
+    const updatedHabits = deleteHabitFromStorage(habits, habitId);
+    setHabits(updatedHabits);
+  };
+
   return (
     <>
-      <div className={`min-h-screen ${currentTheme.bgClass} transition-colors duration-500`}>
+      {/* Apply background/text based on active theme type */}
+      <div
+        className={`min-h-screen ${!isCustomThemeActive ? currentTheme.bgClass : ''} transition-colors duration-500`}
+        style={isCustomThemeActive ? {
+          backgroundColor: 'var(--custom-background)',
+          color: 'var(--custom-text)'
+        } : {}}
+      >
         {isFocusModeEnabled ? (
           // Focus Mode - Only show the timer
           <div className="container mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-screen">
@@ -1329,17 +1442,19 @@ const PomodoroApp: React.FC = () => {
                   // Task Import/Export
                   onImportTasks={handleImportTasks}
 
-                  // Excel Export
+                  // Data Export
                   tasks={tasks}
                   sessionHistory={sessionHistory}
                   pomodoroTime={pomodoroTime}
                   shortBreakTime={shortBreakTime}
                   longBreakTime={longBreakTime}
+                  completedPomodoros={completedPomodoros}
+                  gamificationData={gamificationData}
 
                   // Notes
                   onNotesToggle={toggleNotes}
                   isNotesOpen={isNotesOpen}
-                  
+
                   // Settings
                   onStatisticsClick={toggleStatistics}
                   onTimerSettingsClick={toggleSettings}
@@ -1348,7 +1463,7 @@ const PomodoroApp: React.FC = () => {
 
                 <div className="flex flex-wrap justify-center">
                   <div className="dropdown inline-block relative group z-20 mr-2">
-                    <button 
+                    <button
                       onClick={() => setIsSettingsMenuOpen(!isSettingsMenuOpen)}
                       className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors cursor-pointer">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1359,7 +1474,7 @@ const PomodoroApp: React.FC = () => {
                     </button>
                     <div className={`dropdown-menu ${isSettingsMenuOpen ? 'block' : 'hidden'} absolute z-10 left-0 mt-2 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 w-56`}>
                       <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-                        <button 
+                        <button
                           onClick={toggleSettings}
                           className="flex items-center w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
                         >
@@ -1369,7 +1484,7 @@ const PomodoroApp: React.FC = () => {
                           Timer Settings
                         </button>
 
-                        <button 
+                        <button
                           onClick={toggleStatistics}
                           className="flex items-center w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
                         >
@@ -1379,7 +1494,7 @@ const PomodoroApp: React.FC = () => {
                           Statistics
                         </button>
                       </div>
-                      
+
                       <div className="p-2">
                         <div className="flex items-center w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 20 20" stroke="currentColor">
@@ -1387,7 +1502,7 @@ const PomodoroApp: React.FC = () => {
                           </svg>
                           <span className="mr-2">Task View</span>
                           <div className="ml-auto">
-                            <button 
+                            <button
                               onClick={() => setIsSequentialTaskView(!isSequentialTaskView)}
                               className={`relative inline-flex items-center h-5 rounded-full w-10 ${
                                 isSequentialTaskView ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
@@ -1402,9 +1517,9 @@ const PomodoroApp: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="dropdown inline-block relative group z-20">
-                    <button 
+                    <button
                       onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
                       className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors cursor-pointer">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1425,14 +1540,14 @@ const PomodoroApp: React.FC = () => {
                           currentThemeId={currentTimerThemeId}
                         />
                       </div>
-                      
+
                       <div className="p-2 border-t border-gray-200 dark:border-gray-700">
                         <SoundOptions
                           onSoundChange={handleSoundChange}
                           currentSound={currentSound}
                         />
                       </div>
-                      
+
                       <div className="p-3 border-t border-gray-200 dark:border-gray-700">
                         <div className="flex items-center justify-between">
                           <div className="text-xs font-medium text-gray-700 dark:text-gray-300">Do Not Disturb</div>
@@ -1461,7 +1576,14 @@ const PomodoroApp: React.FC = () => {
 
             <div className="max-w-2xl mx-auto">
               <motion.main
-                className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-8 mb-8"
+                // Use CSS variables for background/text if custom theme is active
+                className={`rounded-xl shadow-lg p-8 mb-8 ${!isCustomThemeActive ? 'bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm' : ''}`}
+                style={isCustomThemeActive ? {
+                  backgroundColor: 'var(--custom-background)', // Or a slightly modified version if needed
+                  color: 'var(--custom-text)',
+                  // Add backdrop-filter manually if needed for custom themes
+                  // backdropFilter: 'blur(4px)', // Example
+                } : {}}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.5 }}
@@ -1483,7 +1605,34 @@ const PomodoroApp: React.FC = () => {
                   {getTimerLabel()}
                 </h2>
 
-                <TaskInput onTaskChange={handleTaskInputChange} currentTask={currentTask} />
+                <TaskInput
+                  onTaskChange={handleTaskInputChange}
+                  currentTask={currentTask}
+                  onTaskSubmit={(taskTitle) => {
+                    // Buat task baru dari input
+                    const newTask: Task = {
+                      id: `task-${Date.now()}`,
+                      title: taskTitle,
+                      completed: false,
+                      pomodoros: 1,
+                      completedPomodoros: 0,
+                      updatedAt: Date.now(),
+                      tags: [],
+                    };
+
+                    // Tambahkan ke task list
+                    handleTaskAdd(newTask);
+
+                    // Pilih sebagai current task
+                    handleTaskSelect(newTask.id);
+
+                    // Tampilkan notifikasi kecil (opsional)
+                    if (typeof window !== 'undefined') {
+                      // Bisa tambahkan toast notification jika diinginkan
+                      console.log(`Added and selected task: ${taskTitle}`);
+                    }
+                  }}
+                />
 
                 <Timer
                   totalTime={getCurrentTime()} // Pass total time for progress calculation
@@ -1492,6 +1641,9 @@ const PomodoroApp: React.FC = () => {
                   isActive={isActive} // Still needed for Timer interface compatibility
                   theme={currentTimerTheme}
                 />
+
+                {/* Health Reminder: tampilkan saat break */}
+                <HealthReminder isBreak={currentTimer !== 'pomodoro'} />
 
                 {/* Timer Mode Selector */}
                 <div className="flex justify-center space-x-2 mt-4 mb-4">
@@ -1536,7 +1688,7 @@ const PomodoroApp: React.FC = () => {
                   onSkip={skipTimer}
                 />
                 )}
-                
+
                 {/* Task List Button (moved from below) */}
                 <div className="flex justify-center mt-4 mb-2">
                   <button
@@ -1549,7 +1701,7 @@ const PomodoroApp: React.FC = () => {
                     <span>View Task List</span>
                   </button>
                 </div>
-                
+
                 {/* Progress Timeline */}
                 <div className="mt-6">
                   <ProgressTimeline
@@ -1598,7 +1750,7 @@ const PomodoroApp: React.FC = () => {
               </AnimatePresence>
 
               {/* Menghapus tombol task list yang sudah dipindahkan ke atas */}
-              
+
             </div>
 
             {/* ProductivityInsights Dashboard */}
@@ -1611,7 +1763,7 @@ const PomodoroApp: React.FC = () => {
                   transition={{ duration: 0.3 }}
                   className="mb-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 overflow-hidden"
                 >
-                  <ProductivityInsights 
+                  <ProductivityInsights
                     sessionHistory={sessionHistory}
                     tasks={tasks}
                     totalPomodorosCompleted={completedPomodoros}
@@ -1730,7 +1882,7 @@ const PomodoroApp: React.FC = () => {
             exit={{ opacity: 0 }}
             onClick={() => setIsProductivityInsightsOpen(false)}
           >
-            <motion.div 
+            <motion.div
               className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto"
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
@@ -1759,7 +1911,7 @@ const PomodoroApp: React.FC = () => {
             exit={{ opacity: 0 }}
             onClick={() => setIsTaskListModalOpen(false)}
           >
-            <motion.div 
+            <motion.div
               className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col"
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
@@ -1774,7 +1926,7 @@ const PomodoroApp: React.FC = () => {
                   Task List
                 </h2>
                 <div className="flex items-center space-x-2">
-                  <button 
+                  <button
                     onClick={() => setIsSequentialTaskView(!isSequentialTaskView)}
                     className="flex items-center space-x-1 text-sm px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
@@ -1783,7 +1935,7 @@ const PomodoroApp: React.FC = () => {
                     </svg>
                     <span>{isSequentialTaskView ? "Grid View" : "Sequential View"}</span>
                   </button>
-                  <button 
+                  <button
                     onClick={() => setIsTaskListModalOpen(false)}
                     className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                   >
@@ -1793,93 +1945,13 @@ const PomodoroApp: React.FC = () => {
                   </button>
                 </div>
               </div>
-              
+
               <div className="flex-grow overflow-auto">
                 <div className="p-4">
-                  {/* Add TaskInput at the top of the task list in modal */}
-                  <div className="mb-6 bg-gray-50 dark:bg-gray-750 p-4 rounded-lg shadow-sm">
-                    <div className="flex items-center mb-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
-                      </svg>
-                      <h3 className="text-lg font-semibold text-indigo-700 dark:text-indigo-300">Add New Task</h3>
-                    </div>
-                    <form onSubmit={(e) => {
-                      e.preventDefault();
-                      if (currentTask.trim() !== '') {
-                        // Generate a new task with unique ID
-                        const newTask: Task = {
-                          id: `task-${Date.now()}`,
-                          title: currentTask,
-                          completed: false,
-                          pomodoros: 1,
-                          completedPomodoros: 0,
-                          updatedAt: Date.now(),
-                          tags: [],
-                        };
-                        
-                        // Add the task to the task list
-                        handleTaskAdd(newTask);
-                        
-                        // Clear the current task input
-                        handleTaskInputChange('');
-                      }
-                    }} className="space-y-3">
-                      <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 bg-white dark:bg-gray-700">
-                        <input
-                          className="appearance-none bg-transparent border-none w-full text-gray-700 dark:text-gray-200 py-2 px-3 leading-tight focus:outline-none"
-                          type="text"
-                          placeholder="What are you working on?"
-                          value={currentTask}
-                          onChange={(e) => handleTaskInputChange(e.target.value)}
-                          aria-label="Task name"
-                        />
-                        <button
-                          className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors flex items-center"
-                          type="submit"
-                          disabled={!currentTask.trim()}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                          </svg>
-                          Add
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                  
-                  {/* Task List Categories */}
-                  <div className="mb-4 flex justify-between items-center">
-                    <div className="flex space-x-2">
-                      <button 
-                        className={`px-3 py-1 text-sm rounded-full ${
-                          true ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' : 
-                          'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-                        }`}
-                      >
-                        All ({tasks.length})
-                      </button>
-                      <button 
-                        className="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                      >
-                        Active ({tasks.filter(t => !t.completed).length})
-                      </button>
-                      <button 
-                        className="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                      >
-                        Completed ({tasks.filter(t => t.completed).length})
-                      </button>
-                    </div>
-                    {tasks.length > 0 && (
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {tasks.filter(t => t.completed).length}/{tasks.length} completed
-                      </div>
-                    )}
-                  </div>
-                  
+
                   {/* Task List */}
                   {tasks.length === 0 ? (
-                    <div className="text-center py-12">
+                    <div className="text-center pb-12">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
@@ -1905,13 +1977,16 @@ const PomodoroApp: React.FC = () => {
                         <TaskList
                           tasks={tasks}
                           currentTaskId={currentTaskId}
-                          onTaskSelect={(id) => {
-                            handleTaskSelect(id);
-                            setIsTaskListModalOpen(false);
-                          }}
+                          onTaskSelect={handleTaskSelect}
                           onTaskAdd={handleTaskAdd}
                           onTaskUpdate={handleTaskUpdate}
                           onTaskDelete={handleTaskDelete}
+                          closeTaskListModal={() => setIsTaskListModalOpen(false)}
+                          showInputFormByDefault={false}
+                          habits={habits}
+                          onHabitAdd={handleHabitAdd}
+                          onHabitComplete={handleHabitComplete}
+                          onHabitDelete={handleHabitDelete}
                         />
                       )}
                     </div>

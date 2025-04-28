@@ -1,0 +1,49 @@
+/* Styles for drag and drop functionality */
+
+/* When dragging is active, make sure the cursor stays as grabbing */
+body.dnd-dragging {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+/* Ensure all elements maintain the grabbing cursor during drag */
+body.dnd-dragging * {
+  cursor: grabbing !important;
+}
+
+/* Prevent text selection during drag operations */
+body.dnd-dragging .draggable-item {
+  user-select: none;
+}
+
+/* Add a subtle transition for drag items */
+.react-beautiful-dnd-draggable {
+  transition: transform 0.2s ease;
+}
+
+/* Style for the drag handle */
+.drag-handle {
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Improve visibility of the dragged item */
+.is-dragging {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  z-index: 9999 !important;
+}
+
+/* Style for the drop area when an item is being dragged over it */
+.is-dragging-over {
+  background-color: rgba(79, 70, 229, 0.1);
+  border: 2px dashed rgba(79, 70, 229, 0.5);
+}
+
+/* Dark mode adjustments */
+.dark .is-dragging-over {
+  background-color: rgba(79, 70, 229, 0.2);
+  border: 2px dashed rgba(79, 70, 229, 0.4);
+}

@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 
-type TaskInputProps = {
+interface TaskInputProps {
   onTaskChange: (task: string) => void;
   currentTask: string;
-};
+  onTaskSubmit?: (task: string) => void;
+}
 
-export default function TaskInput({ onTaskChange, currentTask }: TaskInputProps) {
+const TaskInput: React.FC<TaskInputProps> = ({ onTaskChange, currentTask, onTaskSubmit }) => {
   const [task, setTask] = useState(currentTask);
   const [, setIsTaskSet] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -29,6 +30,11 @@ export default function TaskInput({ onTaskChange, currentTask }: TaskInputProps)
       setTimeout(() => {
         setShowFeedback(false);
       }, 2000);
+
+      // Jika ada onTaskSubmit, panggil untuk menambahkan ke task list
+      if (onTaskSubmit) {
+        onTaskSubmit(task);
+      }
     }
   };
 
@@ -41,10 +47,10 @@ export default function TaskInput({ onTaskChange, currentTask }: TaskInputProps)
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Current Task</span>
       </div>
 
-      <form onSubmit={handleSubmit} className="mb-2">
-        <div className="flex items-center border-b border-gray-300 dark:border-gray-700 py-2">
+      <form onSubmit={handleSubmit} className="mb-4">
+        <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 bg-white dark:bg-gray-700">
           <input
-            className="appearance-none bg-transparent border-none w-full text-gray-700 dark:text-gray-200 mr-3 py-1 px-2 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500/50 rounded transition-all"
+            className="appearance-none bg-transparent border-none w-full text-gray-700 dark:text-gray-200 py-2 px-3 leading-tight focus:outline-none"
             type="text"
             placeholder="What are you working on?"
             value={task}
@@ -52,13 +58,13 @@ export default function TaskInput({ onTaskChange, currentTask }: TaskInputProps)
             aria-label="Task name"
           />
           <button
-            className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700 text-sm border-4 text-white py-1 px-2 rounded cursor-pointer shadow-sm transition-colors flex items-center"
+            className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors flex items-center"
             type="submit"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
-            Set Task
+            Set
           </button>
         </div>
       </form>
@@ -76,4 +82,6 @@ export default function TaskInput({ onTaskChange, currentTask }: TaskInputProps)
       </div>
     </div>
   );
-}
+};
+
+export default TaskInput;

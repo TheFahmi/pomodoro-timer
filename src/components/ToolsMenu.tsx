@@ -8,9 +8,12 @@ import Link from 'next/link';
 import CustomThemeSelector, { CustomThemeColors } from './CustomThemeSelector';
 import CalendarIntegration from './CalendarIntegration';
 import ExcelExport from './ExcelExport';
+import ExportData from './ExportData';
 import TodoIntegration from './TodoIntegration';
 import { Task } from './TaskList';
 import { SessionHistory } from './PomodoroApp';
+import HabitTracker, { Habit } from './HabitTracker';
+import { GamificationData } from './Gamification';
 
 type ToolsMenuProps = {
   // Focus Mode
@@ -45,23 +48,31 @@ type ToolsMenuProps = {
   // Task Import/Export
   onImportTasks?: (tasks: Task[]) => void;
 
-  // Excel Export
+  // Data Export
   tasks?: Task[];
   sessionHistory?: SessionHistory[];
   pomodoroTime?: number;
   shortBreakTime?: number;
   longBreakTime?: number;
+  completedPomodoros?: number;
+  gamificationData?: GamificationData;
 
   // Notes
   onNotesToggle?: () => void;
   isNotesOpen?: boolean;
-  
+
   // Settings
   onStatisticsClick?: () => void;
   onTimerSettingsClick?: () => void;
 
   // Productivity Insights
   onProductivityInsightsClick: () => void;
+
+  // Habit Tracker
+  habits?: Habit[];
+  onHabitAdd?: (habit: Omit<Habit, 'id' | 'createdAt' | 'completedDates' | 'currentStreak' | 'longestStreak'>) => void;
+  onHabitComplete?: (habitId: string, date: string) => void;
+  onHabitDelete?: (habitId: string) => void;
 };
 
 export default function ToolsMenu({
@@ -94,23 +105,31 @@ export default function ToolsMenu({
   // Task Import/Export
   onImportTasks,
 
-  // Excel Export
+  // Data Export
   tasks = [],
   sessionHistory = [],
   pomodoroTime = 0,
   shortBreakTime = 0,
   longBreakTime = 0,
+  completedPomodoros = 0,
+  gamificationData,
 
   // Notes
   onNotesToggle = () => {},
   isNotesOpen = false,
-  
+
   // Settings
   onStatisticsClick = () => {},
   onTimerSettingsClick = () => {},
 
   // Productivity Insights
-  onProductivityInsightsClick
+  onProductivityInsightsClick,
+
+  // Habit Tracker
+  habits = [],
+  onHabitAdd = () => {},
+  onHabitComplete = () => {},
+  onHabitDelete = () => {}
 }: ToolsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -158,8 +177,8 @@ export default function ToolsMenu({
 
   // Categories and their icons
   const categories = [
-    { 
-      id: 'focus', 
+    {
+      id: 'focus',
       label: 'Focus',
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -230,13 +249,13 @@ export default function ToolsMenu({
         <div className="fixed inset-0 z-50 flex bg-black/30 backdrop-blur-sm" onClick={(e) => {
           if (e.target === e.currentTarget) setIsOpen(false);
         }}>
-          <div 
-            className="fixed inset-y-0 left-0 w-80 bg-white dark:bg-gray-800 shadow-xl overflow-y-auto animate-slide-in-left"
+          <div
+            className="fixed inset-y-0 left-0 w-100 bg-white dark:bg-gray-800 shadow-xl overflow-y-auto animate-slide-in-left"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Pomodoro Menu</h2>
-              <button 
+              <button
                 onClick={() => setIsOpen(false)}
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
@@ -245,7 +264,7 @@ export default function ToolsMenu({
                 </svg>
               </button>
             </div>
-            
+
             {/* Navigation sidebar */}
             <div className="flex h-[calc(100%-64px)]">
               {/* Categories */}
@@ -255,13 +274,13 @@ export default function ToolsMenu({
                     key={category.id}
                     onClick={() => toggleCategory(category.id)}
                     className={`flex flex-col items-center justify-center w-full p-2 mb-1 transition-colors ${
-                      activeCategory === category.id 
+                      activeCategory === category.id
                         ? `text-${category.color}-600 dark:text-${category.color}-400`
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                   >
                     <div className={`p-2 rounded-full mb-1 ${
-                      activeCategory === category.id 
+                      activeCategory === category.id
                         ? `bg-${category.color}-100 dark:bg-${category.color}-900/30`
                         : ''
                     }`}>
@@ -271,7 +290,7 @@ export default function ToolsMenu({
                   </button>
                 ))}
               </div>
-              
+
               {/* Content area */}
               <div className="flex-1 p-4 overflow-y-auto">
                 {/* Focus Category */}
@@ -345,6 +364,16 @@ export default function ToolsMenu({
                 {activeCategory === 'productivity' && (
                   <div className="space-y-6">
                     <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Habit Tracker</h3>
+                      <HabitTracker
+                        habits={habits}
+                        onHabitAdd={onHabitAdd}
+                        onHabitComplete={onHabitComplete}
+                        onHabitDelete={onHabitDelete}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Calendar Integration</h3>
                       <CalendarIntegration
                         onEventSelect={onCalendarEventSelect || (() => {})}
@@ -395,6 +424,22 @@ export default function ToolsMenu({
                 {activeCategory === 'data' && (
                   <div className="space-y-6">
                     <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Enhanced Data Export</h3>
+                      {gamificationData ? (
+                        <ExportData
+                          tasks={tasks}
+                          sessionHistory={sessionHistory}
+                          completedPomodoros={completedPomodoros}
+                          gamificationData={gamificationData}
+                        />
+                      ) : (
+                        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-md text-sm">
+                          Gamification data not available. Some export features may be limited.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Export to Excel</h3>
                       <ExcelExport
                         tasks={tasks}
@@ -422,7 +467,7 @@ export default function ToolsMenu({
                       </svg>
                       Statistics
                     </button>
-                    
+
                     <button
                       onClick={() => {
                         onTimerSettingsClick();
@@ -455,7 +500,7 @@ export default function ToolsMenu({
           </div>
         </div>
       )}
-      
+
       {/* Todoist Modal */}
       {isTodoistModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
@@ -489,16 +534,16 @@ export default function ToolsMenu({
           from { transform: translateX(-100%); }
           to { transform: translateX(0); }
         }
-        
+
         @keyframes fade-in {
           from { opacity: 0; }
           to { opacity: 1; }
         }
-        
+
         .animate-slide-in-left {
           animation: slide-in-left 0.3s ease-out forwards;
         }
-        
+
         .animate-fade-in {
           animation: fade-in 0.2s ease-out forwards;
         }

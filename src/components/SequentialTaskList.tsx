@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Task } from './TaskList';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
+import { useDndSafeStrictMode, getValidDraggableId } from '../utils/dragDropUtils';
 
 type SequentialTaskListProps = {
   tasks: Task[];
@@ -23,15 +24,14 @@ export default function SequentialTaskList({
   onTaskDelete,
   completedPomodoros,
 }: SequentialTaskListProps) {
-  const [activeTasks, setActiveTasks] = useState<Task[]>([]);
-  const [completedTasks, setCompletedTasks] = useState<Task[]>([]);
+  // Removed local activeTasks and completedTasks state
+  // Removed useEffect that separated tasks
+
   const [showCompleted, setShowCompleted] = useState(false);
 
-  // Separate active and completed tasks
-  useEffect(() => {
-    setActiveTasks(tasks.filter(task => !task.completed));
-    setCompletedTasks(tasks.filter(task => task.completed));
-  }, [tasks]);
+  // Derive active and completed tasks directly from props
+  const activeTasks = tasks.filter(task => !task.completed);
+  const completedTasks = tasks.filter(task => task.completed);
 
   // Handle drag end
   const handleDragEnd = (result: DropResult) => {
@@ -48,15 +48,18 @@ export default function SequentialTaskList({
 
     // If reordering within active tasks
     if (source.droppableId === 'active-tasks' && destination.droppableId === 'active-tasks') {
-      const newActiveTasks = Array.from(activeTasks);
-      const [movedTask] = newActiveTasks.splice(source.index, 1);
-      newActiveTasks.splice(destination.index, 0, movedTask);
-      
-      setActiveTasks(newActiveTasks);
-      
-      // Update the parent component with the new order
-      const newTasks = [...newActiveTasks, ...completedTasks];
+      // Create a new array based on the *current* active tasks derived from props
+      const currentActiveTasks = tasks.filter(task => !task.completed);
+      const [movedTask] = currentActiveTasks.splice(source.index, 1);
+      currentActiveTasks.splice(destination.index, 0, movedTask);
+
+      // Get the current completed tasks to reconstruct the full list
+      const currentCompletedTasks = tasks.filter(task => task.completed);
+
+      // Update the parent component with the new full order
+      const newTasks = [...currentActiveTasks, ...currentCompletedTasks];
       onTasksReorder(newTasks);
+      // No local state update needed here
     }
   };
 
@@ -67,10 +70,10 @@ export default function SequentialTaskList({
     });
   };
 
-  // Calculate the next task in sequence
+  // Calculate the next task in sequence (using derived activeTasks)
   const getNextTaskInSequence = () => {
     if (activeTasks.length === 0) return null;
-    
+
     // If there's a current task, find the next one
     if (currentTaskId) {
       const currentIndex = activeTasks.findIndex(task => task.id === currentTaskId);
@@ -78,12 +81,15 @@ export default function SequentialTaskList({
         return activeTasks[currentIndex + 1];
       }
     }
-    
+
     // Otherwise, return the first task
     return activeTasks[0];
   };
 
   const nextTask = getNextTaskInSequence();
+
+  // Use the strict mode workaround for react-beautiful-dnd
+  useDndSafeStrictMode();
 
   return (
     <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-8">
@@ -106,20 +112,23 @@ export default function SequentialTaskList({
               No active tasks. Add tasks from the Task List.
             </p>
           ) : (
-            <Droppable droppableId="active-tasks">
-              {(provided) => (
+            <Droppable droppableId="active-tasks" isDropDisabled={false} isCombineEnabled={false} ignoreContainerClipping={false}>
+              {(provided, snapshot) => (
                 <ul
                   {...provided.droppableProps}
                   ref={provided.innerRef}
-                  className="space-y-2"
+                  className={`space-y-2 relative ${snapshot.isDraggingOver ? 'bg-indigo-50/50 dark:bg-indigo-900/10 p-2 rounded-lg transition-colors duration-200' : ''}`}
                 >
                   {activeTasks.map((task, index) => (
-                    <Draggable key={task.id} draggableId={task.id} index={index}>
+                    <Draggable key={task.id} draggableId={getValidDraggableId(task.id)} index={index} isDragDisabled={false}>
                       {(provided, snapshot) => (
                         <li
                           ref={provided.innerRef}
                           {...provided.draggableProps}
-                          {...provided.dragHandleProps}
+                          style={{
+                            ...provided.draggableProps.style,
+                            cursor: snapshot.isDragging ? 'grabbing' : 'grab'
+                          }}
                           className={`p-3 rounded-lg transition-colors ${
                             snapshot.isDragging
                               ? 'bg-indigo-50 dark:bg-indigo-900/30 shadow-md'
@@ -132,7 +141,10 @@ export default function SequentialTaskList({
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
-                              <div className="flex items-center justify-center h-6 w-6 bg-gray-200 dark:bg-gray-700 rounded-full text-xs font-medium text-gray-800 dark:text-gray-200">
+                              <div
+                                className="flex items-center justify-center h-6 w-6 bg-gray-200 dark:bg-gray-700 rounded-full text-xs font-medium text-gray-800 dark:text-gray-200 cursor-grab active:cursor-grabbing"
+                                {...provided.dragHandleProps}
+                              >
                                 {index + 1}
                               </div>
                               <input
@@ -181,7 +193,7 @@ export default function SequentialTaskList({
                               </button>
                             </div>
                           </div>
-                          
+
                           {/* Progress bar */}
                           <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
                             <div
